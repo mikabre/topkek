@@ -1,0 +1,33 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.25420.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FinanceThing", "FinanceThing\FinanceThing.csproj", "{EB3D0CC9-0179-4211-A50B-40A3ED563695}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Osiris", "..\Osiris\Osiris\Osiris.csproj", "{85D900B0-F2B3-4346-BDB6-814C688A421D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Heimdall", "..\Heimdall\Heimdall\Heimdall.csproj", "{C33F33F4-928B-46A5-8150-B2C642B800EA}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EB3D0CC9-0179-4211-A50B-40A3ED563695}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EB3D0CC9-0179-4211-A50B-40A3ED563695}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EB3D0CC9-0179-4211-A50B-40A3ED563695}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EB3D0CC9-0179-4211-A50B-40A3ED563695}.Release|Any CPU.Build.0 = Release|Any CPU
+		{85D900B0-F2B3-4346-BDB6-814C688A421D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{85D900B0-F2B3-4346-BDB6-814C688A421D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{85D900B0-F2B3-4346-BDB6-814C688A421D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C33F33F4-928B-46A5-8150-B2C642B800EA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C33F33F4-928B-46A5-8150-B2C642B800EA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C33F33F4-928B-46A5-8150-B2C642B800EA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C33F33F4-928B-46A5-8150-B2C642B800EA}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
