@@ -30,7 +30,13 @@ namespace Osiris
 
         public static string RemoveDuplicateColor(string input)
         {
-            return string.Join(COLOR, input.Split(new string[] { COLOR }, StringSplitOptions.RemoveEmptyEntries));
+            string ret = string.Join(COLOR, input.Split(new string[] { COLOR }, StringSplitOptions.RemoveEmptyEntries));
+            if (input.StartsWith(COLOR))
+                ret = COLOR + ret;
+            if (input.EndsWith(COLOR))
+                ret = ret + COLOR;
+
+            return ret;
         }
 
         public static IEnumerable<int> AllIndexesOf(this string str, string searchstring)

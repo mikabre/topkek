@@ -11,6 +11,11 @@ namespace Fun
 {
     interface IResolver
     {
-        //public bool Matches(string URL, )
+        string Name { get; }
+
+        bool Matches(string URL);
+        bool Ready(string URL);
+        string GetSummary(string URL);
+        string GetCacheID(string URL);
     }
 }

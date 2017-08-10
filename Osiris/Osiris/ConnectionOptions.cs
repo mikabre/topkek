@@ -11,14 +11,17 @@ namespace Osiris
 {
     public class ConnectionOptions
     {
+        public string Name { get; set; }
         public string Server { get; set; }
         public int Port { get; set; }
         public string Nickname { get; set; }
         public string Password { get; set; }
+        public string NickServPassword { get; set; }
         public string Owner { get; set; }
         public bool NickServ { get; set; }
         public bool Ssl { get; set; }
         public bool ZncLogin { get; set; }
+        public bool Delay { get; set; }
         public string ZncPassword { get; set; }
         public string ZncUsername { get; set; }
         public string ZncNetwork { get; set; }
@@ -30,6 +33,7 @@ namespace Osiris
             Port = Config.GetInt("irc.default.port");
             Password = Config.GetString("irc.default.password");
             Owner = Config.GetString("irc.default.owner");
+            Delay = true;
             NickServ = true;
         }
 

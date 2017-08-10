@@ -9,17 +9,64 @@ using System.Security.Cryptography;
 using System.Threading;
 
 using ChatSharp;
+using System.Runtime.Serialization.Formatters.Binary;
+using System.IO;
 
 namespace Osiris
 {
     public class TokenManager
     {
         public Dictionary<Token, MessageSource> Dictionary = new Dictionary<Token, MessageSource>();
+        public List<Token> PermaTokens = new List<Token>();
 
         public TokenManager()
         {
             Task.Factory.StartNew(PurgeLoop);
+
+            if (File.Exists("./ptokens"))
+                Load();
         }
+
+        public void Load(string path = "./ptokens")
+        {
+            BinaryFormatter formatter = new BinaryFormatter();
+            var stream = File.OpenRead(path);
+
+            try
+            {
+                PermaTokens = (List<Token>)formatter.Deserialize(stream);
+            }
+            catch (Exception ex)
+            {
+                throw;
+            }
+            finally
+            {
+                stream.Close();
+            }
+        }
+
+        public void Save()
+        {
+            BinaryFormatter formatter = new BinaryFormatter();
+            var stream = File.OpenWrite("./ptokens.tmp");
+
+            formatter.Serialize(stream, PermaTokens);
+
+            stream.Close();
+            stream = File.OpenRead("./ptokens.tmp");
+
+            if (formatter.Deserialize(stream) == PermaTokens)
+            {
+                throw new Exception("Inconsistent database");
+            }
+            else
+            {
+                stream.Close();
+                File.Copy("./ptokens.tmp", "./ptokens", true);
+            }
+        }
+
 
         public Token GetToken(MessageSource source)
         {
@@ -41,12 +88,36 @@ namespace Osiris
             return token;
         }
 
+        public Token GetPermaToken(string token)
+        {
+            var source = GetSource(token);
+
+            if (source == null)
+                return null;
+
+            Token new_token = new Token(source);
+            new_token.Expiration = DateTime.MaxValue;
+
+            PermaTokens.Add(new_token);
+            Save();
+
+            return new_token;
+        }
+
         public MessageSource GetSource(string token)
         {
             var pairs = Dictionary.Where(p => p.Key.Key == token);
 
             if (!pairs.Any())
             {
+                if(PermaTokens.Any(p => p.Key == token))
+                {
+                    var ptoke = PermaTokens.First(p => p.Key == token);
+                    PermaTokens.Remove(ptoke);
+
+                    return ptoke.Source;
+                }
+
                 Console.WriteLine("Invalid token {0}", token);
                 return null;
             }
@@ -73,6 +144,7 @@ namespace Osiris
         }
     }
 
+    [Serializable]
     public class Token
     {
         public static RNGCryptoServiceProvider Random = new RNGCryptoServiceProvider();
@@ -101,15 +173,32 @@ namespace Osiris
         }
     }
 
+    [Serializable]
     public class MessageSource
     {
-        public IrcClient Client;
+        private string client_name;
+        [NonSerialized]
+        private IrcClient client_hint;
+
+        public IrcClient Client
+        {
+            get
+            {
+                if (client_hint != null && Program.IrcManager.Clients.Contains(client_hint))
+                    return client_hint;
+
+                client_hint = Program.IrcManager.GetClient(client_name);
+
+                return client_hint;
+            }
+        }
+
         public string Source;
         public bool Notice;
 
         public MessageSource(IrcClient client, string source, bool notice = false)
         {
-            Client = client;
+            client_name = ((ConnectionOptions)client.Options).Name;
             Source = source;
             Notice = notice;
         }

@@ -8,6 +8,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Newtonsoft.Json.Linq;
+
 namespace FinanceThing
 {
     [Serializable]
@@ -19,6 +21,12 @@ namespace FinanceThing
         public static TimeSpan JailTime = new TimeSpan(0, 5, 0);
         public static TimeSpan PayInterval = new TimeSpan(0, 10, 0);
         public static int PayAmount = 600;
+        public static DateTime LastSaved = DateTime.Now;
+
+        public Dictionary<string, string> Translation = new Dictionary<string, string>()
+        {
+
+        };
 
         public MoneyManager()
         {
@@ -50,8 +58,42 @@ namespace FinanceThing
             }
         }
 
-        public void Save()
+        public bool SaveQueued = false;
+        public DateTime SaveQueueTime = DateTime.Now;
+
+        public ManualResetEvent SaveQueueEvent = new ManualResetEvent(false);
+
+        public void SaveQueue()
         {
+            SaveQueued = true;
+            SaveQueueEvent.Reset();
+
+            while (SaveQueueEvent.WaitOne(5000))
+                SaveQueueEvent.Reset();
+
+            Save(really: true);
+            SaveQueued = false;
+        }
+
+        public void Save(bool really = false)
+        {
+            if(!really)
+            {
+                if (SaveQueued)
+                    SaveQueueEvent.Set();
+                else
+                    Task.Factory.StartNew(SaveQueue);
+
+                return;
+            }
+
+            Console.WriteLine("Really saved");
+
+            //if ((DateTime.Now - LastSaved).TotalSeconds < 5)
+            //    return;
+
+            //LastSaved = DateTime.Now;
+
             lock (Transactions)
             {
                 IFormatter formatter = new BinaryFormatter();
@@ -88,6 +130,17 @@ namespace FinanceThing
 
                     trans.Close();
                 }
+
+                if(File.Exists("./translations.json"))
+                {
+                    var obj = JObject.Parse(File.ReadAllText("./translations.json"));
+
+                    foreach (var child in obj.Children())
+                    {
+                        foreach (var c2 in child.Values())
+                            Translation[c2.Value<string>()] = ((JProperty)child).Name.PadRight(16, '0');
+                    }
+                }
             }
             catch
             {
@@ -115,6 +168,9 @@ namespace FinanceThing
 
         public void Log(string desc, string source, string from, string to, long amount)
         {
+            if (Translation.ContainsKey(source.ToLower()))
+                source = Translation[source.ToLower()];
+
             lock (Transactions)
             {
                 Transactions.Add(new Transaction(desc, source, from, to, amount, DateTime.Now));
@@ -126,7 +182,10 @@ namespace FinanceThing
             nick = nick.ToLower();
             channel = channel.ToLower();
 
-            if(!Users.Any(u => u.Name == nick && u.Channel == channel))
+            if (Translation.ContainsKey(channel))
+                channel = Translation[channel];
+
+            if (!Users.Any(u => u.Name == nick && u.Channel == channel))
             {
                 if (create)
                 {

@@ -22,6 +22,7 @@ namespace ChatSharp
         public bool StripColors = false;
         public bool Reconnecting = false;
         public object Options = null;
+        public bool Delay = true;
 
         public event NickChanged NickChanged;
 
@@ -184,6 +185,8 @@ namespace ChatSharp
                     if ((DateTime.Now - MessageHistory.Skip(MessageHistory.Count - 10).First()).TotalSeconds < 5)
                         delay += 300;
 
+                    delay = Delay ? delay : 0;
+
                     Console.WriteLine("Sleeping {0} ms for {1}...", delay, msg);
                     Thread.Sleep(delay);
                     MessageHistory.Add(DateTime.Now);
@@ -345,7 +348,7 @@ namespace ChatSharp
             }
         }
 
-        public void SendRealRawMessage(string message, params object[] format)
+        public void SendRealRawMessage(string message)
         {
             try
             {
@@ -355,7 +358,7 @@ namespace ChatSharp
                     return;
                 }
 
-                message = string.Format(message, format);
+                //message = string.Format(message, format);
                 var data = Encoding.GetBytes(message + "\r\n");
 
                 NetworkStream.BeginWrite(data, 0, data.Length, MessageSent, message);

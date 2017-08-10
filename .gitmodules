@@ -1,0 +1,4 @@
+[submodule "Fun/SharpChannel"]
+	path = Fun/SharpChannel
+	url = https://github.com/hexafluoride/SharpChannel.git
+	branch = master

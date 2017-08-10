@@ -27,6 +27,7 @@ namespace Osiris
         public static void Init(string[] args, Action act = null)
         {
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.GetCultureInfo("en-US");
+            Config.Load();
 
             string host = "localhost";
 
@@ -61,6 +62,7 @@ namespace Osiris
             Connection.AddHandler("message", CallMatcher);
             Connection.AddHandler("get_uptime", GetUptime);
             Connection.AddHandler("send_matchers", (c, m) => { SetUpMatchers(); });
+            Connection.AddHandler("rehash", (c, m) => { Config.Load(); });
 
             SetUpMatchers();
         }
@@ -78,6 +80,19 @@ namespace Osiris
             ms.Close();
         }
 
+        public static string MakePermanent(string token)
+        {
+            MemoryStream ms = new MemoryStream();
+            ms.WriteString(token);
+
+            var arr = ms.ToArray();
+            
+            string ret = Encoding.Unicode.GetString(Connection.WaitFor(ms.ToArray(), "get_ptoken", "irc", "ptoken"));
+            ms.Close();
+
+            return ret;
+        }
+
         public static string GetSource(string source)
         {
             // a5cf1d34219b2c6eea4b449c88fed665
@@ -87,13 +102,15 @@ namespace Osiris
 
         public static void SetUpMatchers()
         {
+            char[] command = new char[] { '.', '$', '!', '?', '>' };
+
             foreach (var pair in Commands)
             {
-                if (!pair.Key.StartsWith(".") && !pair.Key.StartsWith("$"))
-                    AddMatcher(pair.Key, pair.Key, MatchType.Contains, false, true);
+                if (!command.Any(c => pair.Key.StartsWith(c.ToString())))
+                    AddMatcher(pair.Key, pair.Key, MatchType.Contains, false, false);
                 else
                     AddMatcher(pair.Key, pair.Key, MatchType.StartsWith, pair.Key.StartsWith("$"));
-            }
+            }   
         }
 
         public static void AddMatcher(string id, string match_str, Osiris.MatchType type, bool owner_only = false, bool last_to_execute = false)

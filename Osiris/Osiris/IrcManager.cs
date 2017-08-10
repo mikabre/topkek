@@ -20,7 +20,6 @@ namespace Osiris
 
         public List<IrcClient> Clients = new List<IrcClient>();
         public TokenManager TokenManager = new TokenManager();
-        public List<string> Ignore = new List<string>();
         public List<Trigger> Triggers = new List<Trigger>();
         public List<KeyValuePair<string, string>> IgnoreModules = new List<KeyValuePair<string, string>>();
 
@@ -36,6 +35,14 @@ namespace Osiris
             PingLoop();
         }
 
+        public IrcClient GetClient(string name)
+        {
+            if (!Clients.Any(c => ((ConnectionOptions)c.Options).Name == name))
+                return null;
+
+            return Clients.First(c => ((ConnectionOptions)c.Options).Name == name);
+        }
+
         public void Connect(ConnectionOptions options)
         {
             if (Clients.Any(c => c.ServerAddress == options.Server))
@@ -49,6 +56,7 @@ namespace Osiris
             }
 
             Client.Options = options;
+            Client.Delay = options.Delay;
 
             Client.IgnoreInvalidSSL = true;
 
@@ -94,7 +102,7 @@ namespace Osiris
             {
                 if (options.NickServ)
                 {
-                    Client.SendMessage("identify " + options.Password, "NickServ");
+                    Client.SendMessage("identify " + options.NickServPassword, "NickServ");
                 }
                 Client.authed = true;
                 Client.Reconnecting = false;
@@ -308,6 +316,11 @@ namespace Osiris
 
             source.Client.SendMessage(message, source.Source);
         }
+        private List<string> dontheal = new List<string>()
+        {
+            "dbladez",
+            "dsockwell"
+        };
 
         private void ChannelMessage(object sender, PrivateMessageEventArgs e)
         {
@@ -316,7 +329,10 @@ namespace Osiris
             if (!client.authed)
                 client.authact();
 
-            if (Ignore.Contains(e.PrivateMessage.User.Nick) && e.PrivateMessage.User.Nick != client.Owner)
+            var source = new MessageSource(client, e.PrivateMessage.Source);
+            string id = BitConverter.ToString(source.GetHash()).ToLower().Replace("-", "");
+
+            if ((Config.Contains("ignored", e.PrivateMessage.User.Nick) || Config.Contains("ignored", id + "/" + e.PrivateMessage.User.Nick)) && e.PrivateMessage.User.Nick != client.Owner)
                 return;
 
             //Triggers.ForEach(t => t.ExecuteIfMatches(e.IrcMessage, client));
@@ -337,6 +353,18 @@ namespace Osiris
                 }
 
                 return;
+            }
+
+            if(msg.StartsWith("$rehash") && authed)
+            {
+                foreach (string str in Program.GetModules())
+                {
+                    Program.Connection.SendMessage("", "rehash", str);
+                }
+
+                Config.Load();
+
+                client.SendMessage("done", e.PrivateMessage.Source);
             }
 
             if (!(authed && msg.StartsWith("$")))
@@ -365,14 +393,6 @@ namespace Osiris
                 if(authed)
                 {
                     IgnoreModules.Add(new KeyValuePair<string, string>(msg.Substring("$ignoremodule".Length), e.PrivateMessage.Source));
-                }
-                return;
-            }
-            else if (msg.StartsWith("$ignore"))
-            {
-                if (authed)
-                {
-                    Ignore.Add(msg.Substring(".ignore".Length).Trim());
                 }
                 return;
             }
@@ -453,14 +473,6 @@ namespace Osiris
                 }
                 return;
             }
-            else if (msg.StartsWith("$unignore"))
-            {
-                if (authed)
-                {
-                    Ignore.Remove(msg.Substring(".unignore".Length).Trim());
-                }
-                return;
-            }
             else if (msg.StartsWith(".bots"))
             {
                 if ((DateTime.Now - LastBots).TotalSeconds < 3)
@@ -533,7 +545,7 @@ namespace Osiris
             {
                 client.SendMessage(string.Format("I-I am, {0}~", e.PrivateMessage.User.Nick), e.PrivateMessage.Source);
             }
-            else if(MatchesHealRequest(msg))
+            else if(MatchesHealRequest(msg) && !dontheal.Contains(e.PrivateMessage.User.Nick))
             {
                 msg = msg.Trim();
 
@@ -541,7 +553,7 @@ namespace Osiris
 
                 if(msg.Contains(" "))
                 {
-                    if(client.Channels[e.PrivateMessage.Source].Users.Any(user => user.Nick == msg.Split(' ')[1]))
+                    if(client.Channels[e.PrivateMessage.Source].Users.Any(user => user.Nick == msg.Split(' ')[1] && !dontheal.Contains(user.Nick)))
                         nick = msg.Split(' ')[1];
                 }
                 double rnd = MacBotGen.Random.NextDouble();
@@ -578,8 +590,31 @@ namespace Osiris
                 }
             }
 
-            Token token = TokenManager.GetToken(new MessageSource(client, e.PrivateMessage.Source));
+            if (msg.StartsWith("$ignore"))
+            {
+                if (authed)
+                {
+                    string nick = msg.Substring(".ignore".Length).Trim();
 
+                    Config.Add("ignored", id + "/" + nick);
+                    Config.Save();
+                    //Ignore.Add(msg.Substring(".ignore".Length).Trim());
+                }
+                return;
+            }
+            else if (msg.StartsWith("$unignore"))
+            {
+                if(authed)
+                {
+                    string nick = msg.Substring(".unignore".Length).Trim();
+
+                    Config.Remove("ignored", id + "/" + nick);
+                    Config.Save();
+                }
+                return;
+            }
+
+            Token token = TokenManager.GetToken(new MessageSource(client, e.PrivateMessage.Source));
             e.PrivateMessage.Message = msg;
 
             if (OnMessage != null)

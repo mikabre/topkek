@@ -1,5 +1,7 @@
 ﻿using ChatSharp;
 using ConversionTherapy;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -10,14 +12,21 @@ using System.Threading.Tasks;
 
 namespace Osiris
 {
+    [Serializable]
     public class Trigger
     {
         public static HomoglyphTable Table = new HomoglyphTable("./glyphs.txt");
 
         public string MatchString { get; set; }
+
+        [JsonConverter(typeof(StringEnumConverter))]
         public TriggerType TriggerType { get; set; }
+        [JsonConverter(typeof(StringEnumConverter))]
         public TriggerMatchType TriggerMatchType { get; set; }
+        [JsonConverter(typeof(StringEnumConverter))]
         public TriggerResult TriggerResult { get; set; }
+
+        public string Location { get; set; }
         public string ResultString { get; set; }
         public string ID { get; set; }
         public bool Strip { get; set; }
@@ -38,6 +47,8 @@ namespace Osiris
         {
             try
             {
+
+
                 string haystack = "";
 
                 if (TriggerType == TriggerType.Raw)
@@ -52,6 +63,29 @@ namespace Osiris
                     else if (TriggerResult == TriggerResult.Irc)
                         client.SendMessage(ResultString, new PrivateMessage(msg).Source);
                     else if (TriggerResult == TriggerResult.Modify)
+                    {
+                        string temp = haystack;
+
+                        if (FixHomoglyphs)
+                            temp = Table.Purify(temp);
+                        if (Strip)
+                            temp = Utilities.Sanitize(temp);
+                        if (AsciiOnly)
+                            temp = new string(temp.Where(c => (char.IsLetterOrDigit(c) || char.IsSymbol(c) || MatchString.Contains(c))).ToArray());
+
+                        switch (TriggerMatchType)
+                        {
+                            case TriggerMatchType.Contains:
+                                return temp.Replace(MatchString, ResultString);
+                            case TriggerMatchType.EndsWith:
+                                return temp.Substring(0, temp.Length - MatchString.Length) + ResultString;
+                            case TriggerMatchType.StartsWith:
+                                return ResultString + temp.Substring(MatchString.Length);
+                            case TriggerMatchType.Regex:
+                                return Regex.Replace(temp, MatchString, m => { return ResultString; }, Insensitive ? RegexOptions.IgnoreCase : RegexOptions.None);
+                        }
+                    }
+                    else if (TriggerResult == TriggerResult.Rewrite)
                         return ResultString;
                 }
             }
@@ -75,7 +109,7 @@ namespace Osiris
                 msg = Utilities.Sanitize(msg);
 
             if (AsciiOnly)
-                msg = new string(msg.Where(c => (char.IsLetterOrDigit(c) || char.IsSymbol(c))).ToArray());
+                msg = new string(msg.Where(c => (char.IsLetterOrDigit(c) || char.IsSymbol(c) || MatchString.Contains(c))).ToArray());
 
             bool matches = false;
 
@@ -105,11 +139,6 @@ namespace Osiris
         //    IrcMessage msg = new IrcMessage(raw);
 
         //}
-
-        public static Trigger DeserializeTrigger(string trigger)
-        {
-            return null;
-        }
 
         // 5 bits + 2 bytes + 2 bytes + text
 
@@ -163,6 +192,9 @@ namespace Osiris
                 ret.AsciiOnly = options.Contains("a");
                 ret.StopExecution = options.Contains("e");
                 ret.FixHomoglyphs = options.Contains("h");
+
+                if (ret.Insensitive)
+                    ret.MatchString = ret.MatchString.ToLower();
             }
 
             return ret;
@@ -214,6 +246,6 @@ namespace Osiris
     }
     public enum TriggerResult
     {
-        Raw, Irc, Modify
+        Raw, Irc, Modify, Rewrite
     }
 }

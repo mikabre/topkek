@@ -18,6 +18,13 @@ namespace Fun
     class LinkResolver
     {
         public static TimedCache Cache = new TimedCache();
+        public static List<IResolver> Resolvers = new List<IResolver>(); // ordered by priority
+
+        public static void AddResolver(IResolver resolver)
+        {
+            Resolvers.Add(resolver);
+            Console.WriteLine("Loaded resolver {0}", resolver.Name);
+        }
 
         public static string GetTitle(string url)
         {
@@ -83,63 +90,54 @@ namespace Fun
             return input;
         }
 
-        public static bool IsYouTubeLink(string url)
-        {
-            return
-                url.StartsWith("http://youtube.com") ||
-                url.StartsWith("https://youtube.com") ||
-                url.StartsWith("http://www.youtube.com") ||
-                url.StartsWith("https://www.youtube.com") ||
-                url.StartsWith("http://youtu.be") ||
-                url.StartsWith("https://youtu.be");
-        }
-
-        public static string GetVideoID(string url)
-        {
-            if(url.Contains("youtu.be") && !url.Contains("feature"))
-            {
-                string[] parts = url.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
-
-                if (parts.Length < 3)
-                    return "-";
-
-                if (parts[2].Contains('?'))
-                    return parts[2].Split('?')[0];
-
-                return parts[2];
-            }
-            else
-            {
-                string[] parts = url.Split(new[] { "v=" }, StringSplitOptions.RemoveEmptyEntries);
-
-                if (!parts.Any())
-                    return "-";
-
-                if (parts[1].Contains("&"))
-                    return parts[1].Split('&')[0];
-
-                return parts[1];
-            }
-        }
-
-        public static async Task<KeyValuePair<string, string>> GetSummary(string url, bool idonly = false)
+        public static async Task<KeyValuePair<string, string>> GetSummary(string url, bool debug = false)
         {
             try
             {
-                string id = IsYouTubeLink(url) ? GetVideoID(url) : url;
+                string id = url;
 
                 if (Cache.Get(id) != null)
                     return new KeyValuePair<string, string>(url, Cache.Get(id).Content + "(cache hit)");
 
-                if(IsYouTubeLink(url))
+                IResolver resolver = null;
+                bool valid_to_cache = true;
+
+                for(int i = 0; i < Resolvers.Count; i++)
                 {
-                    string ID = GetVideoID(url);
-                    string summary = "";
+                    resolver = Resolvers[i];
 
-                    summary = Program.YoutubeResolver.GetSummary(ID);
-                    Cache.Add(ID, summary, TimedCache.DefaultExpiry);
+                    try
+                    {
+                        if (resolver == null || !resolver.Matches(url))
+                        {
+                            continue;
+                        }
 
-                    return new KeyValuePair<string, string>(ID, summary);
+                        if (!resolver.Ready(url))
+                        {
+                            Console.WriteLine("Resolver {0} isn't ready yet, not caching", resolver.Name);
+                            valid_to_cache = false;
+                            continue;
+                        }
+                        
+                        id = resolver.GetCacheID(url);
+
+                        if (Cache.Get(id) != null)
+                            return new KeyValuePair<string, string>(url, Cache.Get(id).Content + "(cache hit)");
+                        
+                        string summary = resolver.GetSummary(url);
+
+                        if (summary != "-")
+                        {
+                            if(valid_to_cache)
+                                Cache.Add(id, summary, TimedCache.DefaultExpiry);
+                            return new KeyValuePair<string, string>(id, summary);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(ex);
+                    }
                 }
 
                 HttpClient httpClient = new HttpClient();
@@ -184,7 +182,9 @@ namespace Fun
                         string title = "";
                         
                         title = GetTitle(url);
-                        Cache.Add(url, title, TimedCache.DefaultExpiry);
+
+                        if (valid_to_cache)
+                            Cache.Add(url, title, TimedCache.DefaultExpiry);
 
                         return new KeyValuePair<string, string>(url, title);
                     case LinkType.Image:
@@ -205,29 +205,32 @@ namespace Fun
                             else
                                 msg = string.Format("11{0} image({1}x{2})", imgtype, bmp.Width, bmp.Height);
 
-                            Cache.Add(url, msg, TimedCache.DefaultExpiry);
+                            if (valid_to_cache)
+                                Cache.Add(url, msg, TimedCache.DefaultExpiry);
                             return new KeyValuePair<string, string>(url, msg);
                         }
                     case LinkType.Video:
                     case LinkType.Audio:
-                        {
-                            var resp = await httpClient.GetAsync(url);
-                            string temp = Path.GetTempFileName();
-                            byte[] data = await resp.Content.ReadAsByteArrayAsync();
-                            File.WriteAllBytes(temp, data);
-                            string ret = string.Format(MediaInfo.GetMediaInfo(temp), GetBoldLength(length));
-                            File.Delete(temp);
+                        //{
+                        //    var resp = await httpClient.GetAsync(url);
+                        //    string temp = Path.GetTempFileName();
+                        //    byte[] data = await resp.Content.ReadAsByteArrayAsync();
+                        //    File.WriteAllBytes(temp, data);
+                        //    string ret = string.Format(MediaInfo.GetMediaInfo(temp), GetBoldLength(length));
+                        //    File.Delete(temp);
 
-                            Cache.Add(url, ret, TimedCache.DefaultExpiry);
-                            return new KeyValuePair<string, string>(url, ret);
-                        }
+                        //    Cache.Add(url, ret, TimedCache.DefaultExpiry);
+                        //    return new KeyValuePair<string, string>(url, ret);
+                        //}
                     case LinkType.Generic:
                         if (length != 0)
                         {
                             string ret = "";
 
                             ret = string.Format("11{0}, {1}", mime, GetBoldLength(length));
-                            Cache.Add(url, ret, TimedCache.DefaultExpiry);
+
+                            if (valid_to_cache)
+                                Cache.Add(url, ret, TimedCache.DefaultExpiry);
 
                             return new KeyValuePair<string, string>(url, ret);
                         }
@@ -257,33 +260,37 @@ namespace Fun
 
         static Random rnd = new Random();
 
+        public static string GetProperLength(long length)
+        {
+            double K = 1024;
+            double M = K * K;
+            double G = K * M;
+
+            if (length > G)
+                return (length / G).ToString("0.00") + " GB";
+
+            if (length > M)
+                return (length / M).ToString("0.00") + " MB";
+
+            if (length > K)
+                return (length / K).ToString("0.00") + " KB";
+
+            return length + " B";
+        }
+
         public static string GetLength(long length)
         {
-            //double K = 1024;
-            //double M = K * K;
-            //double G = K * M;
-
-            //if (length > G)
-            //    return (length / G).ToString("0.00") + " GB";
-
-            //if (length > M)
-            //    return (length / M).ToString("0.00") + " MB";
-
-            //if (length > K)
-            //    return (length / K).ToString("0.00") + " KB";
-
-            //return length + " B";
             Dictionary<string, double> Units = new Dictionary<string, double>()
             {
-                { " inches of uncompressed DDS-2 tape", 846667d },
-                { " seconds of Bell 202 audio", 150d },
-                { " square millimeters of CD", 174000d },
-                { " times jquery-3.1.0.min.js", 86351d }
+                { " inches of uncompressed DDS-2 tape({0})", 846667d },
+                { " seconds of Bell 202 audio({0})", 150d },
+                { " square millimeters of CD({0})", 174000d },
+                { " times jquery-3.1.0.min.js({0})", 86351d }
             };
 
             var pair = Units.ElementAt(rnd.Next(Units.Count));
 
-            return (length / pair.Value).ToString("0.00") + pair.Key;
+            return string.Format((length / pair.Value).ToString("0.00") + pair.Key, "" + GetProperLength(length) + "");
         }
 
         public static string GetBoldLength(long length)

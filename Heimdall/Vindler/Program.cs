@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.IO;
 
 using Heimdall;
+using System.Net;
 
 namespace Vindler
 {
@@ -21,7 +22,7 @@ namespace Vindler
 
         static void Main(string[] args)
         {
-            Listener listener = new Listener(9933);
+            Listener listener = new Listener(IPAddress.Loopback, 9933);
 
             listener.NewConnection += listener_NewConnection;
             listener.Start();

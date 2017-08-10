@@ -12,6 +12,8 @@ using System.Text.RegularExpressions;
 using System.Globalization;
 using System.Web;
 using System.Net;
+using Newtonsoft.Json.Linq;
+using System.Threading;
 
 namespace Fun
 {
@@ -19,8 +21,7 @@ namespace Fun
     class Program : ExampleModule
     {
         static QuoteManager Quotes;
-
-        public static YoutubeResolver YoutubeResolver = new YoutubeResolver();
+        
         public static RuleManager RuleManager = new RuleManager();
 
         public static List<string> Disabled = new List<string>();
@@ -40,6 +41,8 @@ namespace Fun
                 if (!Disabled.Contains(channel))
                     Disabled.Add(channel);
             }
+
+            File.WriteAllLines("./disabled", Disabled.ToArray());
         }
 
         static void GetRules(string args, string source, string n)
@@ -123,7 +126,7 @@ namespace Fun
             if (string.IsNullOrWhiteSpace(args))
                 return;
 
-            string result = YoutubeResolver.Search(args);
+            string result = YoutubeUtils.Search(args);
 
             if (result == "")
                 return;
@@ -235,6 +238,21 @@ namespace Fun
             catch { }
         }
 
+        static void PermaTokenTest(string args, string source, string nick)
+        {
+            args = args.Substring("$ptoken".Length).Trim();
+
+            if(!string.IsNullOrWhiteSpace(args))
+            {
+                SendMessage("Testing token " + args, args);
+                return;
+            }
+
+            SendMessage("Temporary token: " + source, source);
+            string ptoken = MakePermanent(source);
+            SendMessage("Permanent token: " + ptoken, source);
+        }
+
         static void SetCache(string args, string source, string nick)
         {
             args = args.Substring("$setcache".Length).Trim();
@@ -257,9 +275,9 @@ namespace Fun
             }
         }
 
-        static void ImageSearch(string args, string source, string n)
+        static void SearchImage(string args, string source, string n)
         {
-            bool random = args.StartsWith(".ir");
+            bool random = args[2] == 'r';
 
             args = args.Substring(".im".Length).Trim();
             string result = Fun.ImageSearch.SearchImages(args, random, false);
@@ -270,9 +288,12 @@ namespace Fun
 
         static void GifSearch(string args, string source, string n)
         {
-            //bool random = args.StartsWith(".gif");
+            bool random = args[3] == 'r';
 
             args = args.Substring(".gif".Length).Trim();
+            if (random)
+                args = args.Substring(1).Trim();
+
             string result = Fun.ImageSearch.SearchImages(args, true, true);
 
             if (result != "-")
@@ -281,7 +302,7 @@ namespace Fun
 
         static void TumblrSearch(string args, string source, string n)
         {
-            bool random = args.StartsWith(".tr");
+            bool random = args[2] == 'r';
 
             args = args.Substring(".tu".Length).Trim();
             string result = Fun.ImageSearch.SearchImages(args + " site:tumblr.com", random, false);
@@ -294,16 +315,118 @@ namespace Fun
         {
             //bool random = args.StartsWith(".g");
 
-            args = args.Substring(".g".Length).Trim();
-            string result = Fun.ImageSearch.SearchLinks(args, false);
+            try
+            {
+                ManualResetEvent finished = new ManualResetEvent(false);
 
-            if (result != "-")
-                SendMessage(string.Format("Found {0}: {1}", args, result), source);
+                Task.Factory.StartNew(delegate
+                {
+                    args = args.Substring(".g".Length).Trim();
+                    string result = Fun.ImageSearch.SearchLinks(args, false);
+
+                    if (result != "-")
+                    {
+                        SendMessage(string.Format("Found {0}: {1}", args, result), source);
+                        finished.Set();
+                    }
+                });
+
+                if (!finished.WaitOne(3000))
+                    throw new Exception();
+            }
+            catch
+            {
+                //SendMessage("It appears that Google is currently blocking search queries. Please try again in a few hours(it usually works when the sun is over Europe)! Try using ?ddg for now.", source);
+                DdgSearch("fallback " + args, source, n);
+            }
+        }
+
+        static void DdgSearch(string args, string source, string n)
+        {
+            //bool random = args.StartsWith(".g");
+
+            try
+            {
+                ManualResetEvent finished = new ManualResetEvent(false);
+
+                Task.Factory.StartNew(delegate
+                {
+                    bool fallback = args.StartsWith("fallback");
+
+                    if (fallback)
+                        args = args.Substring("fallback".Length).Trim();
+                    else
+                        args = args.Substring(".ddg".Length).Trim();
+
+                    string result = Fun.ImageSearch.SearchLinksDdg(args, false);
+
+                    if (result != "-")
+                    {
+                        SendMessage(string.Format("Found {0}{2}: {1}", args, result, fallback ? " (duckduckgo fallback)" : ""), source);
+                        finished.Set();
+                    }
+                });
+
+                if (!finished.WaitOne(3000))
+                    throw new Exception();
+            }
+            catch
+            {
+                SendMessage("How did this even fail?", source);
+            }
         }
 
         static void NoU(string args, string source, string n)
         {
             //SendMessage("no u", source);
+        }
+
+        static void Remind(string args, string source, string n)
+        {
+            if (!args.StartsWith("!remind"))
+                return;
+
+            args = args.Substring("!remind".Length).Trim();
+
+            StringBuilder msg = new StringBuilder();
+            StringBuilder t = new StringBuilder();
+            bool in_quotes = false;
+
+            for(int i = 0; i < args.Length; i++)
+            {
+                if(args[i] == '"')
+                {
+                    in_quotes = !in_quotes;
+                    continue;
+                }
+
+                if (!in_quotes)
+                {
+                    t.Append(args[i]);
+                }
+                else
+                    msg.Append(args[i]);
+            }
+
+            var time = RemindManager.Get(t.ToString());
+
+            if((DateTime.Now - time).Duration().TotalSeconds < 1)
+            {
+                SendMessage("What?", source);
+                return;
+            }
+
+            //SendMessage("Message: " + msg.ToString(), source);
+            SendMessage("I'll remind you at " + time.ToString(), source);
+            //SendMessage("Token: " + MakePermanent(source), source);
+
+            RemindManager.Add(time, msg.ToString(), n, MakePermanent(source));
+        }
+
+        static void GetComments(string args, string source, string n)
+        {
+            args = args.Substring("$comment".Length).Trim();
+            SendMessage(YoutubeUtils.GetComment(args, source, n), source);
         }
 
         static void Main(string[] args)
@@ -312,31 +435,178 @@ namespace Fun
 
             Quotes = new QuoteManager();
             RuleManager = RuleManager.Load();
+            TellManager.Load();
+            RemindManager.Load();
+            RemindManager.ReminderDone += (r) =>
+            {
+                SendMessage(string.Format("{0}, you asked to be reminded of \"{1}\" at {2}.", r.Nick, r.Message, r.StartDate), r.Token);
+            };
+            Task.Factory.StartNew(RemindManager.TimingLoop);
 
             Commands = new Dictionary<string, Osiris.MessageHandler>()
             {
+                {"", CheckTells },
                 {"$getid", GetIdentifier },
                 {"http", ResolveLink },
                 {"no u", NoU },
-                {"!quote", ManageQuotes },
+                {".quote", ManageQuotes },
                 {"$london", SquareLondon },
                 {"!london", SquareLondon },
-                {"!youtube", YoutubeSearch },
-                {"!yt", YoutubeSearch },
+                {"?youtube", YoutubeSearch },
+                {"?yt", YoutubeSearch },
                 {"!rules", Rules },
                 {"$links", Enable },
                 {"$getcache", GetCache },
                 {"$setcache", SetCache },
-                {"!im", ImageSearch },
-                {"!ir", ImageSearch },
-                {"!gif", GifSearch },
-                {"!tu", TumblrSearch },
-                {"!tr", TumblrSearch },
-                {"!g ", GoogleSearch }
+                {"?im", SearchImage },
+                {"?ir", SearchImage },
+                {"?gif", GifSearch },
+                {"?gifr", GifSearch },
+                {"?tu", TumblrSearch },
+                {"?tr", TumblrSearch },
+                {"?g ", GoogleSearch },
+                {"?ddg ", DdgSearch },
+                {"$ptoken", PermaTokenTest },
+                {"!remind", Remind },
+                {".ud", UrbanSearch },
+                {"$comment", GetComments },
+                {">tell", Tell },
+                {".wa", Wolfram },
+                {">wa", Wolfram },
+                {".dumptells", DumpTells }
             };
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls; // comparable to modern browsers
+            
+            if(File.Exists("./disabled"))
+                Disabled = File.ReadAllLines("./disabled").ToList();
 
-            Init(args);
+            Init(args, delegate {
+                var ch = new FourChanResolver();
+
+                LinkResolver.AddResolver(ch);
+                LinkResolver.AddResolver(new FourChanImageResolver() { Parent = ch });
+                LinkResolver.AddResolver(new SoundCloudResolver());
+                LinkResolver.AddResolver(new YoutubeWrapper());
+            });
+        }
+
+        public static void UrbanSearch(string args, string source, string n)
+        {
+            args = args.Substring(".ud".Length).Trim();
+            SendMessage(GetUd(args), source);
+        }
+
+        public static void DumpTells(string args, string source, string n)
+        {
+            SendMessage("I'm now sending you(via NOTICEs) all >tells you've ever sent, and all >tells you've ever received.", source);
+
+            foreach (var tell in TellManager.Tells.Where(t => t.To == n))
+                SendNotice(tell.ToString(), source, n);
+
+            foreach (var tell in TellManager.Tells.Where(t => t.From == n))
+                SendNotice(tell.ToString(), source, n);
+        }
+
+        static WebClient ud_client = new WebClient();
+        static WebClient wa_client = new WebClient();
+
+        public static void Wolfram(string args, string source, string n)
+        {
+            string query = args.Substring(".wa".Length).Trim();
+            string result = "";
+
+            try
+            {
+                string response = wa_client.DownloadString(string.Format("https://api.wolframalpha.com/v2/query?appid={0}&input={1}&output=json&includepodid=Input&includepodid=Result&format=plaintext", Config.GetString("wolfram.key"), HttpUtility.UrlEncode(query)));
+                var obj = JObject.Parse(response);
+
+                if (!obj["queryresult"].Value<bool>("success"))
+                {
+                    throw new Exception();
+                }
+
+                var pods = obj["queryresult"]["pods"];
+
+                var input_pod = pods.First(p => p.Value<string>("id") == "Input");
+                var result_pod = pods.First(p => p.Value<string>("id") == "Result");
+
+                result = string.Format("10{0} = 12{1}", input_pod["subpods"].First.Value<string>("plaintext"), result_pod["subpods"].First.Value<string>("plaintext"));
+            }
+            catch
+            {
+                try
+                {
+                    result = wa_client.DownloadString(string.Format("https://api.wolframalpha.com/v1/result?appid={0}&i={1}&units=metric", Config.GetString("wolfram.key"), HttpUtility.UrlEncode(query)));
+                }
+                catch
+                {
+                    SendMessage("[4Wolfram] 4Couldn't display answer", source);
+                    return;
+                }
+            }
+
+            SendMessage(string.Format("[4Wolfram] {1}", n, result), source);
+        }
+
+        public static string GetUd(string query)
+        {
+            string endpoint = "https://mashape-community-urban-dictionary.p.mashape.com/define?term={0}";
+            string key = Config.GetString("mashape.key");
+
+            ud_client.Headers["X-Mashape-Key"] = key;
+            ud_client.Headers["Accept"] = "text/plain";
+
+            string response = ud_client.DownloadString(string.Format(endpoint, query));
+            JObject obj = JObject.Parse(response);
+
+            if (obj["list"].Any())
+                return string.Format("{0}: {1}", query, obj["list"].First()["definition"].Value<string>().Replace("\r\n", " "));
+
+            return string.Format("No definition found for {0}.", query);
+        }
+
+        static void Tell(string args, string source, string n)
+        {
+            args = args.Substring(">tell".Length).Trim();
+
+            if (Config.Contains("tell.disabled", GetSource(source)))
+                return;
+
+            string nick = args.Split(' ')[0];
+            string message = string.Join(" ", args.Split(' ').Skip(1));
+
+            string[] tell_responses = new string[] { "teehee", "rawr xD" };
+
+            TellManager.Tell(n, nick, message);
+            SendMessage(ImageSearch.Random.NextDouble() > 0.5 ? "okay buddy!!!" : tell_responses[ImageSearch.Random.Next(tell_responses.Length)], source);
+        }
+
+        static void CheckTells(string args, string source, string n)
+        {
+            if(RemindManager.SeenTrackedNicks.Contains(n))
+                if (RemindManager.SeenTracker.Any(s => s.Key.Nick == n))
+                    foreach (var p in RemindManager.SeenTracker.Where(s => s.Key.Nick == n))
+                        p.Value.Set();
+
+            if (ImageSearch.Random.NextDouble() < (1d / Config.GetDouble("skynet.chance")))
+            {
+                string comment = YoutubeUtils.GetComment(args, GetSource(source), n);
+                if (comment.Length > 0)
+                    SendMessage(comment, source);
+            }
+
+            var tells = TellManager.GetTells(n);
+
+            if (!tells.Any())
+                return;
+
+            foreach (var tell in tells)
+            {
+                SendMessage(tell.ToString(), source);
+                TellManager.Expire(tell);
+            }
+
+            TellManager.Save();
         }
 
         static async void GetIdentifier(string args, string source, string n)
@@ -401,7 +671,20 @@ namespace Fun
                 if (!regex.IsMatch(args))
                     return;
 
-                string url = regex.Matches(args)[0].Value;
+                var match = regex.Matches(args)[0];
+                int fragment_index = match.Index + match.Length;
+                string fragment = "";
+
+                if (args.Length > fragment_index)
+                {
+                    if (args[fragment_index] == '#')
+                    {
+                        while (args.Length > fragment_index && args[fragment_index] != ' ')
+                            fragment += args[fragment_index++];
+                    }
+                }
+
+                string url = match.Value + fragment;
 
                 var result = await LinkResolver.GetSummary(url);
                 string summary = result.Value;
@@ -415,9 +698,9 @@ namespace Fun
 
                 SendMessage(string.Format("{0} ({1}s)", summary, sw.Elapsed.TotalSeconds.ToString("0.00")), source);
             }
-            catch
+            catch (Exception ex)
             {
-
+                Console.WriteLine(ex);
             }
         }
     }

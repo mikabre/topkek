@@ -15,6 +15,7 @@ using Heimdall;
 using ChatSharp;
 using ChatSharp.Events;
 using System.Globalization;
+using System.Collections;
 
 namespace Osiris
 {
@@ -74,9 +75,39 @@ namespace Osiris
             Connection.AddHandler("get_users", GetUsers);
             Connection.AddHandler("get_users_noreg", GetUsersNoReg);
             Connection.AddHandler("is_registered", IsRegistered);
+            Connection.AddHandler("get_ptoken", MakePermanent);
 
             foreach (string module in GetModules())
                 Connection.SendMessage(new byte[0], "send_matchers", module);
+            
+            Task.Factory.StartNew(delegate
+            {
+                Thread.Sleep(30000);
+
+                while (true)
+                {
+                    while (!Config.GetValue<bool>("debug.threads"))
+                        Thread.Sleep(1000);
+
+                    while (Config.GetValue<bool>("debug.threads"))
+                    {
+                        while (!IrcManager.Clients.Any(c => c.Socket.Connected))
+                            Thread.Sleep(100);
+
+                        int num = System.Diagnostics.Process.GetCurrentProcess().Threads.Count;
+
+                        IrcManager.Clients.First().SendMessage(string.Format("{0} active threads", num), "NUL");
+
+                        if (num > 10)
+                        {
+                            Thread.Sleep(1000);
+                            continue;
+                        }
+
+                        Thread.Sleep(5000);
+                    }
+                }
+            });
 
             while (true)
             {
@@ -99,6 +130,22 @@ namespace Osiris
                 //    Client.JoinChannel(str);
                 //}
             }
+        }
+
+        private static void MakePermanent(Connection conn, Message msg)
+        {
+            MemoryStream ms = new MemoryStream(msg.Data);
+
+            var token = ms.ReadString();
+
+            ms.Close();
+
+            var ptoken = IrcManager.TokenManager.GetPermaToken(token);
+
+            if (ptoken == null)
+                conn.SendMessage("-", "ptoken", msg.Source);
+            else
+                conn.SendMessage(ptoken.Key, "ptoken", msg.Source);
         }
 
         private static Dictionary<char, string> ModeAliases = new Dictionary<char, string>()
@@ -459,6 +506,9 @@ namespace Osiris
             MemoryStream ms = new MemoryStream(msg.Data);
             MessageMatcher matcher = (MessageMatcher)bf.Deserialize(ms);
 
+            if (matcher == null)
+                return;
+
             if (!Matchers.Any(m => m.ID == matcher.ID && m.MatchString == matcher.MatchString && m.MatchType == matcher.MatchType && m.Node == matcher.Node))
                 Matchers.Add(matcher);
 
@@ -477,7 +527,7 @@ namespace Osiris
             IrcManager.SendMessage(message, target);
         }
 
-        static string[] GetModules()
+        public static string[] GetModules()
         {
             List<string> ret = new List<string>();
 

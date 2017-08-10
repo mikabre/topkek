@@ -21,6 +21,9 @@ namespace FinanceThing
 
         static Dictionary<string, Dictionary<string, char>> ModeCache = new Dictionary<string, Dictionary<string, char>>();
         static Dictionary<string, DateTime> LastStatsUse = new Dictionary<string, DateTime>();
+        static Dictionary<string, int> TransactionHistoryUsed = new Dictionary<string, int>();
+
+        static Dictionary<string, DateTime> LastBetUse = new Dictionary<string, DateTime>();
 
         static void Main(string[] args)
         {
@@ -60,7 +63,8 @@ namespace FinanceThing
                 {".rigreport", RigReport },
                 {"$addexpr", AddToExpression },
                 {"$execute", ExecuteExpression},
-                {"$startexpr", StartTyping }
+                {"$startexpr", StartTyping },
+                {"$dumplist", DumpList }
             };
 
             Manager.Load();
@@ -113,6 +117,19 @@ namespace FinanceThing
 
         static Dictionary<string, string> Expressions = new Dictionary<string, string>();
         static List<Tuple<string, string>> CurrentTyping = new List<Tuple<string, string>>();
+
+        static void DumpList(string args, string source, string nick)
+        {
+            ulong total = 0;
+
+            foreach (var pair in LotteryManager.CurrentLottery.Tickets)
+            {
+                SendMessage(pair.Key + ": " + pair.Value.ToString("N0"), source);
+                total += (ulong)pair.Value;
+            }
+
+            SendMessage(string.Format("Total: {0}, Stake: {1}", total, LotteryManager.CurrentLottery.Stake), source);
+        }
 
         static void CheckForExpression(string args, string source, string nick)
         {
@@ -210,6 +227,26 @@ namespace FinanceThing
             }
         }
 
+        static bool CheckEligibility(string args, string source, string nick)
+        {
+            source = GetSource(source);
+
+            if (Config.GetInt(source) == 0)
+                return true;
+
+            if (LastBetUse.ContainsKey(source + "/" + nick))
+            {
+                if ((DateTime.Now - LastBetUse[source + "/" + nick]).TotalSeconds < Config.GetInt(GetSource(source)))
+                {
+                    return false;
+                }
+            }
+
+            LastBetUse[source + "/" + nick] = DateTime.Now;
+
+            return true;
+        }
+
         static void RigReport(string args, string source, string nick)
         {
             args = args.Substring(".rigreport".Length).Trim();
@@ -301,13 +338,9 @@ namespace FinanceThing
                 return;
             }
 
-            ulong amount = 0;
-
-            if (!ulong.TryParse(args.Replace(",", ""), out amount))
+            if (!ulong.TryParse(args.Replace(",", ""), out ulong amount))
             {
-                long temp = 0;
-
-                if (long.TryParse(args.Replace(",", ""), out temp))
+                if (long.TryParse(args.Replace(",", ""), out long temp))
                 {
                     SendMessage(StringManager.GetString("tickets.negative", user), source);
                     return;
@@ -562,6 +595,9 @@ namespace FinanceThing
             {
                 var short_source = GetSource(source);
 
+                if(Manager.Translation.ContainsKey(short_source))
+                    short_source = Manager.Translation[short_source];
+
                 var users = Manager.Users.Where(u => u.Channel == short_source).OrderByDescending(u => u.Balance).ToList();
                 var sum = users.Sum(u => u.Balance);
                 var lottery_sum = LotteryManager.CurrentLottery == null ? 0 : LotteryManager.CurrentLottery.Tickets.Sum(p => p.Value);
@@ -582,12 +618,12 @@ namespace FinanceThing
 
                 if (args.StartsWith("."))
                 {
-                    SendNotice(string.Format("Total amount of money: 3${0:N0} (+{1:N0} lottery tickets)", users.Sum(u => u.Balance), lottery_sum), source, nick);
+                    SendNotice(string.Format("Total amount of money: 3${0:N0}"/* (+{1:N0} lottery tickets)"*/, users.Sum(u => u.Balance), lottery_sum), source, nick);
                     SendNotice("Richest people:", source, nick);
                 }
                 else
                 {
-                    SendMessage(string.Format("Total amount of money: 3${0:N0} (+{1:N0} lottery tickets)", users.Sum(u => u.Balance), lottery_sum), source);
+                    SendMessage(string.Format("Total amount of money: 3${0:N0}"/* (+{1:N0} lottery tickets)"*/, users.Sum(u => u.Balance), lottery_sum), source);
                     SendMessage("Richest people:", source);
                 }
 
@@ -640,11 +676,11 @@ namespace FinanceThing
             if (user == null)
                 return;
             
-            string target_name = "hexafluoride";
+            string target_name = "topkek_2000";
 
             //if (!string.IsNullOrWhiteSpace(args))
             //{
-                var target = string.IsNullOrWhiteSpace(args) ? Manager.GetUser(GetSource(source), "hexafluoride", true) : Manager.GetUser(GetSource(source), args, true);
+                var target = string.IsNullOrWhiteSpace(args) ? Manager.GetUser(GetSource(source), "topkek_2000", true) : Manager.GetUser(GetSource(source), args, true);
                 target.Balance += user.Balance;
                 target_name = target.Name;
             //}
@@ -756,16 +792,15 @@ namespace FinanceThing
             args = args.Substring(".give".Length).Trim();
             var parts = args.Split(' ');
 
+            if (!CheckEligibility(args, source, nick))
+                return;
+
             var user = Manager.GetUser(GetSource(source), nick, true);
             var target = Manager.GetUser(GetSource(source), parts.First());
 
-            ulong amount = 0;
-
-            if (!ulong.TryParse(parts.Last().Replace(",", ""), out amount))
+            if (!ulong.TryParse(parts.Last().Replace(",", ""), out ulong amount))
             {
-                long temp = 0;
-
-                if (long.TryParse(parts.Last().Replace(",", ""), out temp))
+                if (long.TryParse(parts.Last().Replace(",", ""), out long temp))
                 {
                     SendMessage(StringManager.GetString("give.negative", user), source);
                     return;
@@ -802,6 +837,9 @@ namespace FinanceThing
         static void Mug(string args, string source, string nick)
         {
             args = args.Substring(".mug".Length).Trim();
+
+            if (!CheckEligibility(args, source, nick))
+                return;
 
             var user = Manager.GetUser(GetSource(source), nick, true);
             var target = Manager.GetUser(GetSource(source), args);
@@ -842,7 +880,7 @@ namespace FinanceThing
                 }
 
                 Manager.Log("mug", GetSource(source), target.Name, user.Name, (long)amount);
-                SendMessage(StringManager.GetString("mug.successful", user, (tickets != -1 ? t_amount : 0) + amount, args), source);
+                SendMessage(StringManager.GetString("mug.successful", user, (tickets != -1 ? t_amount : 0) + amount, amount, (tickets != -1 ? t_amount : 0), args), source);
             }
             else
             {
@@ -858,8 +896,11 @@ namespace FinanceThing
         static void GetPaid(string args, string source, string nick)
         {
             var user = Manager.GetUser(GetSource(source), nick, true);
+            
+            if (!CheckEligibility(args, source, nick))
+                return;
 
-            if(user.CanGetPaid)
+            if (user.CanGetPaid)
             {
                 user.Balance += MoneyManager.PayAmount;
                 user.LastPaid = DateTime.Now;
@@ -888,6 +929,9 @@ namespace FinanceThing
         {
             var user = Manager.GetUser(GetSource(source), nick, true);
 
+            if (!CheckEligibility(args, source, nick))
+                return;
+
             args = args.Substring(".money".Length).Trim();
             var target = Manager.GetUser(GetSource(source), args);
 
@@ -900,21 +944,21 @@ namespace FinanceThing
         static void Bet(string args, string source, string nick)
         {
             args = args.Substring(".pokies".Length).Trim();
-            ulong amount = 0;
 
             var user = Manager.GetUser(GetSource(source), nick);
 
-            if(args == "coins")
+            if (!CheckEligibility(args, source, nick))
+                return;
+
+            if (args == "coins")
             {
                 SendMessage("real funny eh faggot", source);
                 return;
             }
 
-            if (!ulong.TryParse(args.Replace(",", ""), out amount))
+            if (!ulong.TryParse(args.Replace(",", ""), out ulong amount))
             {
-                long temp = 0;
-
-                if (long.TryParse(args.Replace(",", ""), out temp))
+                if (long.TryParse(args.Replace(",", ""), out long temp))
                 {
                     SendMessage(StringManager.GetString("bet.negative", user), source);
                     return;
@@ -986,7 +1030,7 @@ namespace FinanceThing
                 {"bet.lost", "shit man, u lost 3${0:N0}. better not let the middy know" },
                 {"mug.insufficient", "they dont have any money to steal" },
                 {"mug.unsuccessful", "4,4 2,2 0,1POLICE4,4 2,2  Its the police! looks like u got caught. thats {0} minutes the big house for you!" },
-                {"mug.successful", "u manage to steal 3${0:N0} off {1}" },
+                {"mug.successful", "u manage to steal 3${0:N0}(3${1:N0} + {2:N0} tickets) off {3}" },
                 {"mug.jailed", "ur in jail for another {0} seconds. dont drop the soap!" },
                 {"money.info", "You currently have3 ${0:N0} in the bnz" },
                 {"money.other", "{0} currently has 3${1:N0} in the bnz" },
@@ -1000,9 +1044,9 @@ namespace FinanceThing
                 {"tickets.invalid", "u gotta put coins in the machine mate" },
                 {"tickets.insufficient", "u dont have enough money for that mate" },
                 {"tickets.negative", "stop being a poor cunt and put money in the machine" },
-                {"tickets.info", "u put 3${0:N0} in the pot and got {0} tickets. now theres 3${1:N0} in the pot and ur chance of winning is {2:0.00}%" },
+                {"tickets.info", "u put 3${0:N0} in the pot and got {0:N0} tickets. now theres 3${1:N0} in the pot and ur chance of winning is {2:0.00}%" },
                 {"tickets.nolottery", "theres no lottery running right now mate" },
-                {"chance.info", "{3} chance of winning is {0:0.00}% ({1} tickets out of {2})" },
+                {"chance.info", "{3} chance of winning is {0:0.00}% ({1:N0} tickets out of {2:N0})" },
                 {"chance.notickets", "u havent bought any tickets m8" },
                 {"draw.winner", "{0} won 3${1:N0} from the lottery with {2:N0} tickets" }
             };
