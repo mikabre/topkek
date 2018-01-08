@@ -2,3 +2,7 @@
 	path = Fun/SharpChannel
 	url = https://github.com/hexafluoride/SharpChannel.git
 	branch = master
+[submodule "Exchange"]
+	path = Exchange
+	url = https://github.com/hexafluoride/Exchange.git
+	branch = master
