@@ -4,14 +4,15 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{EB3D0CC9-0179-4211-A50B-40A3ED563695}</ProjectGuid>
-    <OutputType>Exe</OutputType>
+    <ProjectGuid>{4184F8D1-F4AF-4E85-9226-D4B8DD97D533}</ProjectGuid>
+    <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>FinanceThing</RootNamespace>
-    <AssemblyName>FinanceThing</AssemblyName>
-    <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
+    <RootNamespace>ConversionTherapy</RootNamespace>
+    <AssemblyName>ConversionTherapy</AssemblyName>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -32,16 +33,12 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
+  <PropertyGroup>
+    <StartupObject />
+  </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Newtonsoft.Json, Version=10.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <HintPath>..\packages\Newtonsoft.Json.10.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
-    <Reference Include="System.Linq.Dynamic, Version=1.0.5840.25917, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\System.Linq.Dynamic.1.0.6\lib\net40\System.Linq.Dynamic.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
@@ -50,31 +47,11 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Filterer.cs" />
-    <Compile Include="IndexGenerator.cs" />
-    <Compile Include="LotteryManager.cs" />
-    <Compile Include="MoneyManager.cs" />
-    <Compile Include="Program.cs" />
+    <Compile Include="HomoglyphTable.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Transaction.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-    <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\..\Heimdall\Heimdall\Heimdall.csproj">
-      <Project>{c33f33f4-928b-46a5-8150-b2c642b800ea}</Project>
-      <Name>Heimdall</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\Old Projects\ProbablyFair\ProbablyFair\ProbablyFair.csproj">
-      <Project>{87222662-81ed-4f05-b386-e9deea784423}</Project>
-      <Name>ProbablyFair</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\Osiris\Osiris\Osiris.csproj">
-      <Project>{85d900b0-f2b3-4346-bdb6-814c688a421d}</Project>
-      <Name>Osiris</Name>
-    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

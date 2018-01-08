@@ -18,6 +18,11 @@ namespace Fun
 
         public YoutubeWrapper()
         {
+            Task.Factory.StartNew(Load);
+        }
+
+        public void Load()
+        {
             YoutubeUtils.LoadKeys();
         }
 

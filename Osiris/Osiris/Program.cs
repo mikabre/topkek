@@ -38,7 +38,7 @@ namespace Osiris
             IrcManager.OnJoin += IrcManager_OnJoin;
             IrcManager.OnModeChange += IrcManager_OnModeChange;
 
-            var options = Directory.GetFiles("./servers");
+            var options = Directory.GetFiles("./servers", "*.json");
 
             foreach(var file in options)
             {
@@ -57,11 +57,21 @@ namespace Osiris
             }
 
             string host = "localhost";
+            int port = 9933;
 
-            if (args.Length != 0)
-                host = args[0];
+            if (args.Any(a => !a.StartsWith("--")))
+            {
+                host = args.First(a => !a.StartsWith("--"));
 
-            Connection = new ConnectionToRouter(host, 9933, "irc");
+                if (host.Contains(':'))
+                {
+                    var parts = host.Split(':');
+                    host = parts[0];
+                    port = int.Parse(parts[1]);
+                }
+            }
+
+            Connection = new ConnectionToRouter(host, port, "irc");
 
             Connection.AddHandler("add_matcher", AddMatcher);
             Connection.AddHandler("irc_send", SendMessage);
@@ -111,6 +121,11 @@ namespace Osiris
 
             while (true)
             {
+                if (args.Any() && args[0] == "--daemon")
+                {
+                    Thread.Sleep(int.MaxValue);
+                }
+
                 string str = Console.ReadLine();
                 if (str == "q")
                 {
@@ -324,27 +339,12 @@ namespace Osiris
         {
             if (message.Message.StartsWith(".uptime"))
             {
-                // H A C K
-                IrcManager.SendMessage("a fuckton", key.Key);
-                return;
+                var uptimes = GetModules().Select(m => new KeyValuePair<string, int>(m, GetUptime(m)));
+                var latest = uptimes.OrderBy(k => k.Value).First();
 
-                string uptime_str = "";
-
-                foreach (string str in GetModules())
-                {
-                    int val = 0;
-
-                    if (str == "irc")
-                        val = (int)(DateTime.Now - Start).TotalSeconds;
-                    else
-                        val = GetUptime(str);
-
-                    uptime_str += string.Format("{0} uptime: {1}, ", str, GetString(val));
-                }
-
-                uptime_str = new string(uptime_str.Take(uptime_str.Length - 2).ToArray());
-
-                IrcManager.SendMessage(uptime_str, key.Key);
+                IrcManager.SendMessage(string.Format("Last started module: {0} with uptime {1}", latest.Key, GetString(latest.Value)), key.Key);
+                IrcManager.SendMessage(string.Join(" // ", uptimes.Select(p => string.Format("{0} uptime: {1}", p.Key, GetString(p.Value)))), key.Key);
+                
                 return;
             }
 
@@ -553,6 +553,9 @@ namespace Osiris
 
         static int GetUptime(string dest)
         {
+            if (dest == Connection.Name)
+                return (int)(DateTime.Now - Start).TotalSeconds;
+
             if (!IsUp(dest))
                 return -1;
 
@@ -571,16 +574,16 @@ namespace Osiris
             StringBuilder sb = new StringBuilder();
 
             if (span.Days > 0)
-                sb.Append(string.Format("{0} days ", span.Days));
+                sb.Append(string.Format("{0}d", span.Days));
 
             if (span.Hours > 0)
-                sb.Append(string.Format("{0} hours ", span.Hours));
+                sb.Append(string.Format("{0}h", span.Hours));
 
             if (span.Minutes > 0)
-                sb.Append(string.Format("{0} minutes ", span.Minutes));
+                sb.Append(string.Format("{0}m", span.Minutes));
 
             if (span.Seconds > 0)
-                sb.Append(string.Format("{0} seconds ", span.Seconds));
+                sb.Append(string.Format("{0}s", span.Seconds));
 
             return sb.ToString().Trim();
         }

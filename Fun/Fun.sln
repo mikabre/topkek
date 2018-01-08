@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.26228.12
+VisualStudioVersion = 15.0.27130.2010
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fun", "Fun\Fun.csproj", "{F7E2C2C7-52CB-4517-A2FD-0D3064C1520D}"
 EndProject
@@ -9,7 +9,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Heimdall", "..\Heimdall\Hei
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Osiris", "..\Osiris\Osiris\Osiris.csproj", "{85D900B0-F2B3-4346-BDB6-814C688A421D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpChannel", "..\Old Projects\SharpChannel\SharpChannel\SharpChannel.csproj", "{B998D893-58A1-4878-B4D2-11DC3B41A5C8}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpChannel", "SharpChannel\SharpChannel\SharpChannel.csproj", "{B998D893-58A1-4878-B4D2-11DC3B41A5C8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Exchange", "..\Visual Studio 2017\Projects\Binance\Binance\Exchange.csproj", "{E23709DB-07F2-4F92-94A4-741663EEF1A4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -31,8 +33,15 @@ Global
 		{B998D893-58A1-4878-B4D2-11DC3B41A5C8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B998D893-58A1-4878-B4D2-11DC3B41A5C8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B998D893-58A1-4878-B4D2-11DC3B41A5C8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E23709DB-07F2-4F92-94A4-741663EEF1A4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E23709DB-07F2-4F92-94A4-741663EEF1A4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E23709DB-07F2-4F92-94A4-741663EEF1A4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E23709DB-07F2-4F92-94A4-741663EEF1A4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {45BADD9A-FB67-451D-851A-2C895D3B9202}
 	EndGlobalSection
 EndGlobal

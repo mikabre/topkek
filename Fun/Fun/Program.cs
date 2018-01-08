@@ -14,6 +14,7 @@ using System.Web;
 using System.Net;
 using Newtonsoft.Json.Linq;
 using System.Threading;
+using Exchange;
 
 namespace Fun
 {
@@ -26,6 +27,10 @@ namespace Fun
 
         public static List<string> Disabled = new List<string>();
         public static List<string> LinkR9k = new List<string>();
+
+        public static TwitterResolver Twitter = new TwitterResolver();
+
+        public static Dictionary<string, List<string>> CommentSources = new Dictionary<string, List<string>>();
 
         static void Enable(string args, string source, string nick)
         {
@@ -67,6 +72,7 @@ namespace Fun
 
                 List<string> allowed = new List<string>()
                 {
+                    "NUL"
                 };
 
                 if (args.StartsWith("add"))
@@ -112,6 +118,87 @@ namespace Fun
             }
             catch (Exception ex)
             {
+                Console.WriteLine(ex);
+            }
+        }
+
+        static void LastFm(string args, string source, string n)
+        {
+            Console.WriteLine("GOD DARN IT");
+
+            try
+            {
+                if (args.StartsWith(">fm"))
+                    args = args.Substring(">fm".Length).Trim();
+                else
+                    args = args.Substring(">lastfm".Length).Trim();
+
+                string username = "";
+
+                Console.WriteLine("{0} {1}", args, n);
+
+                if (!string.IsNullOrWhiteSpace(args))
+                {
+                    username = args;
+
+                    if (Config.Contains("lastfm.users", t => t.ToString().StartsWith(n.ToLower()), out JToken token))
+                        Config.Remove("lastfm.users", token.ToString());
+
+                    Config.Add("lastfm.users", n.ToLower() + ":" + username);
+                    Config.Save();
+                }
+                else
+                {
+                    if (Config.Contains("lastfm.users", t => t.ToString().StartsWith(n.ToLower()), out JToken token))
+                    {
+                        username = token.ToString().Split(':')[1];
+                    }
+                    else
+                    {
+                        SendMessage("You need to specify a username with >fm <username> first.", source);
+                        return;
+                    }
+                }
+
+                // magic happens here
+
+                Console.WriteLine("before last.fm clal");
+                string response = wa_client.DownloadString(string.Format("http://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user={0}&format=json&api_key={1}", HttpUtility.UrlEncode(username), Config.GetString("lastfm.key")));
+                Console.WriteLine("last.fm call complete");
+                var resp_json = JObject.Parse(response);
+                Console.WriteLine(1);
+                var tracks = resp_json["recenttracks"];
+                Console.WriteLine(2);
+                var track_obj = tracks["track"];
+                Console.WriteLine(3);
+                var track = track_obj[0];
+                Console.WriteLine(4);
+
+                Console.WriteLine(track);
+
+                string artist = track["artist"].Value<string>("#text");
+                Console.WriteLine(5);
+                string track_name = track.Value<string>("name");
+                Console.WriteLine(6);
+
+                //var span = DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0).AddSeconds(track["date"].Value<ulong>("uts"));
+
+                string album = "";
+
+                try
+                {
+                    album = track["album"].Value<string>("#text");
+                }
+                catch
+                {
+
+                }
+
+                SendMessage(string.Format("{0} is currently listening to {1} - {2}{3}.", string.IsNullOrWhiteSpace(args) ? n : username, artist, track_name, album != "" ? string.Format(" on album {0}", album) : ""), source);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Thigns are wrong");
                 Console.WriteLine(ex);
             }
         }
@@ -326,13 +413,21 @@ namespace Fun
 
                     if (result != "-")
                     {
-                        SendMessage(string.Format("Found {0}: {1}", args, result), source);
+                        var preview_result = LinkResolver.GetSummaryWithTimeout(result);
+
+                        string preview = preview_result.Value == "" ? "link preview timed out" : preview_result.Value;
+
+                        if(!finished.WaitOne(0))
+                            SendMessage(string.Format("Found {0}: {1} | {2}", args, result, preview), source);
                         finished.Set();
                     }
                 });
 
                 if (!finished.WaitOne(3000))
+                {
+                    finished.Set();
                     throw new Exception();
+                }
             }
             catch
             {
@@ -362,7 +457,12 @@ namespace Fun
 
                     if (result != "-")
                     {
-                        SendMessage(string.Format("Found {0}{2}: {1}", args, result, fallback ? " (duckduckgo fallback)" : ""), source);
+                        var preview_result = LinkResolver.GetSummaryWithTimeout(result);
+
+                        string preview = preview_result.Value == "" ? "link preview timed out" : preview_result.Value;
+
+                        if (!finished.WaitOne(0))
+                            SendMessage(string.Format("Found {0} (duckduckgo fallback): {1} | {2}", args, result, preview), source);
                         finished.Set();
                     }
                 });
@@ -372,7 +472,7 @@ namespace Fun
             }
             catch
             {
-                SendMessage("How did this even fail?", source);
+                //SendMessage("How did this even fail?", source);
             }
         }
 
@@ -417,7 +517,7 @@ namespace Fun
             }
 
             //SendMessage("Message: " + msg.ToString(), source);
-            SendMessage("I'll remind you at " + time.ToString(), source);
+            SendMessage(string.Format("I'll remind you at {0}, which is {1} from now.", time.ToString(), Utilities.TimeSpanToPrettyString(time - DateTime.Now)), source);
             //SendMessage("Token: " + MakePermanent(source), source);
 
             RemindManager.Add(time, msg.ToString(), n, MakePermanent(source));
@@ -426,7 +526,15 @@ namespace Fun
         static void GetComments(string args, string source, string n)
         {
             args = args.Substring("$comment".Length).Trim();
-            SendMessage(YoutubeUtils.GetComment(args, source, n), source);
+            var tuple = YoutubeUtils.GetComment(args, source, n);
+            SendMessage(tuple.Item2, source);
+
+            source = GetSource(source);
+
+            if (!CommentSources.ContainsKey(source))
+                CommentSources[source] = new List<string>();
+
+            CommentSources[source].Add(string.Format("{0} | {1}", tuple.Item1, tuple.Item2));
         }
 
         static void Main(string[] args)
@@ -437,6 +545,9 @@ namespace Fun
             RuleManager = RuleManager.Load();
             TellManager.Load();
             RemindManager.Load();
+            CryptoHandler.Init();
+            MonitorManager.Init();
+            AlertManager.Init();
             RemindManager.ReminderDone += (r) =>
             {
                 SendMessage(string.Format("{0}, you asked to be reminded of \"{1}\" at {2}.", r.Nick, r.Message, r.StartDate), r.Token);
@@ -446,34 +557,54 @@ namespace Fun
             Commands = new Dictionary<string, Osiris.MessageHandler>()
             {
                 {"", CheckTells },
-                {"$getid", GetIdentifier },
+                {"$getid ", GetIdentifier },
                 {"http", ResolveLink },
                 {"no u", NoU },
                 {".quote", ManageQuotes },
-                {"$london", SquareLondon },
-                {"!london", SquareLondon },
-                {"?youtube", YoutubeSearch },
-                {"?yt", YoutubeSearch },
+                {"$london ", SquareLondon },
+                {"!london ", SquareLondon },
+                {"?youtube ", YoutubeSearch },
+                {"?yt ", YoutubeSearch },
                 {"!rules", Rules },
                 {"$links", Enable },
                 {"$getcache", GetCache },
-                {"$setcache", SetCache },
-                {"?im", SearchImage },
-                {"?ir", SearchImage },
-                {"?gif", GifSearch },
-                {"?gifr", GifSearch },
-                {"?tu", TumblrSearch },
-                {"?tr", TumblrSearch },
+                {"$setcache ", SetCache },
+                {".cache", CacheStats },
+                {"?im ", SearchImage },
+                {"?ir ", SearchImage },
+                {"?gif ", GifSearch },
+                {"?gifr ", GifSearch },
+                {"?tu ", TumblrSearch },
+                {"?tr ", TumblrSearch },
                 {"?g ", GoogleSearch },
                 {"?ddg ", DdgSearch },
                 {"$ptoken", PermaTokenTest },
-                {"!remind", Remind },
-                {".ud", UrbanSearch },
-                {"$comment", GetComments },
-                {">tell", Tell },
-                {".wa", Wolfram },
-                {">wa", Wolfram },
-                {".dumptells", DumpTells }
+                {"!remind ", Remind },
+                {".ud ", UrbanSearch },
+                //{"$comment ", GetComments },
+                {">tell ", Tell },
+                {">lastfm", LastFm },
+                {">fm", LastFm },
+                {".wa ", Wolfram },
+                {">plot ", WolframPlot },
+                {">waplot ", WolframPlot },
+                {">wa ", Wolfram },
+                {".imperial", SetUnits },
+                {".metric", SetUnits },
+                {".units", GetUnits },
+                {".dumptells", DumpTells },
+                {"?tw ", TwitterSearch },
+                //{".source", Source },
+                {".help", Help },
+                //{".btc", BtcRate },
+                {".exc", ExchangeRate },
+                {".insult", Insult },
+                {".strlen", StringLength },
+                {".len", StringLength },
+                {"$monitor", Monitor },
+                {".alert", SetAlert },
+                {".geocode", Geocode },
+                {".weather", GetWeather }
             };
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls; // comparable to modern browsers
             
@@ -481,13 +612,398 @@ namespace Fun
                 Disabled = File.ReadAllLines("./disabled").ToList();
 
             Init(args, delegate {
+                Twitter.Init();
+
                 var ch = new FourChanResolver();
 
                 LinkResolver.AddResolver(ch);
                 LinkResolver.AddResolver(new FourChanImageResolver() { Parent = ch });
                 LinkResolver.AddResolver(new SoundCloudResolver());
                 LinkResolver.AddResolver(new YoutubeWrapper());
+
+                Task.Factory.StartNew(delegate 
+                {
+                    Thread.Sleep(10000);
+
+                    foreach(var board in Config.GetArray<string>("4chan.default_boards"))
+                    {
+                        Console.WriteLine("Loading board /{0}/", board);
+                        ch.GetBoard(board);
+                    }
+                });
             });
+        }
+
+        static void CacheStats(string args, string source, string n)
+        {
+            SendMessage(string.Format("{0:##,#} cache requests, {1:##,#} cache hits, {2:0.00}% hit ratio, {3:##,#} items in cache",
+                LinkResolver.Cache.RequestCount,
+                LinkResolver.Cache.HitCount,
+                ((double)LinkResolver.Cache.HitCount / (double)LinkResolver.Cache.RequestCount) * 100d,
+                LinkResolver.Cache.List.Count), source);
+        }
+
+        static void GetWeather(string args, string source, string n)
+        {
+            try
+            {
+                args = args.Substring(".weather".Length).Trim();
+
+                string human = "";
+                
+                if (!string.IsNullOrWhiteSpace(args))
+                {
+                    human = args;
+
+                    if (Config.Contains("weather.locations", t => t.Value<string>().StartsWith(n.ToLower()), out JToken token))
+                        Config.Remove("weather.locations", token);
+
+                    Config.Add("weather.locations", n.ToLower() + ":" + human);
+                    Config.Save();
+                }
+                else
+                {
+                    if (Config.Contains("weather.locations", t => t.Value<string>().StartsWith(n.ToLower()), out JToken token))
+                    {
+                        human = token.ToString().Split(':')[1];
+                    }
+                    else
+                    {
+                        SendMessage("You need to specify a location with .weather <location> first.", source);
+                        return;
+                    }
+                }
+
+                var coords = Geocoder.GetLatLong(human);
+                var results = Weather.TryGetSummary(coords.Item1, coords.Item2, n);
+
+                SendMessage(n + ": " + results, source);
+            }
+            catch (Exception ex)
+            {
+                SendMessage("Something happened: " + ex.Message, source);
+            }
+        }
+
+        static void Geocode(string args, string source, string n)
+        {
+            var result = Geocoder.GetLatLong(args.Substring(".geocode".Length).Trim());
+
+            if (result == null)
+                SendMessage("Failed", source);
+            else
+                SendMessage(string.Format("{0}, {1}", result.Item1, result.Item2), source);
+        }
+
+        static List<string> Insults = new List<string>();
+        static int insult_index = -1;
+        static Random Random = new Random();
+
+        static void SetAlert(string args, string source, string n)
+        {
+            args = args.Substring(".alert".Length).Trim();
+
+            var parts = args.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            
+            if(parts.Contains("<") || parts.Contains(">"))
+            {
+
+            }
+        }
+
+        static void Monitor(string args, string source, string n)
+        {
+            args = args.Substring("$monitor".Length).Trim();
+            var parts = args.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Any())
+            {
+                if (parts[0] == "add")
+                {
+                    var monitor = new Monitor();
+                    monitor.Ticker = new Ticker(parts[1], parts[2]);
+                    monitor.Precision = int.Parse(parts[3]);
+                    monitor.Unit = (TickerUnit)Enum.Parse(typeof(TickerUnit), parts[4], true);
+
+                    MonitorManager.Monitors.Add(monitor);
+                    MonitorManager.Save();
+
+                    SendMessage(string.Format("Added monitor with ticker {0}, precision {1}, unit {2}", monitor.Ticker, monitor.Precision, monitor.Unit), source);
+                }
+                else if(parts[0] == "remove")
+                {
+                    var ticker = new Ticker(parts[1], parts[2]);
+
+                    if(MonitorManager.Monitors.Any(m => m.Ticker == ticker))
+                    {
+                        MonitorManager.Monitors.RemoveAll(m => m.Ticker == ticker);
+                    }
+
+                    MonitorManager.Save();
+                }
+                else if(parts[0] == "start")
+                {
+                    MonitorManager.Start();
+                }
+                else if (parts[0] == "stop")
+                {
+                    MonitorManager.Stop();
+                }
+                else if (parts[0] == "reorder")
+                {
+                    parts = parts.Skip(1).ToArray();
+
+                    var new_monitors = new List<Monitor>();
+
+                    for(int i = 0; i < parts.Length; i++)
+                    {
+                        new_monitors.Add(MonitorManager.Monitors.First(m => string.Equals(m.Ticker.ToString(), parts[i], StringComparison.InvariantCultureIgnoreCase)));
+                    }
+
+                    MonitorManager.Monitors = new_monitors;
+                    SendMessage("Done.", source);
+                }
+            }
+            else
+            {
+                SendMessage("Triggering monitor update...", source);
+                MonitorManager.PrintMonitorStatus();
+            }
+            //args = args.Substring("$monitor".Length).Trim();
+
+            //var ptoken = args.Split(' ').Last();
+
+            //var thread = new Thread(new ThreadStart(delegate
+            //{
+            //    int count = 5;
+
+            //    for(int i = 0; i < count; i++)
+            //    {
+            //        ExchangeRate(".exc" + args, ptoken, n);
+            //        SendMessage(string.Format("{0} of {1}", i + 1, count), ptoken);
+            //        Thread.Sleep(5000);
+            //    }
+            //}));
+
+            //thread.Start();
+        }
+
+        static List<string> Shuffle(IEnumerable<string> input)
+        {
+            var input_copy = input.ToList();
+            List<string> ret = new List<string>();
+
+            while(input_copy.Any())
+            {
+                int index = Random.Next(input_copy.Count);
+                ret.Add(input_copy[index]);
+                input_copy.RemoveAt(index);
+            }
+
+            return ret;
+        }
+
+        public static void StringLength(string args, string source, string n)
+        {
+            if (args.StartsWith(".len"))
+                args = args.Substring(".len".Length).TrimStart();
+            else if (args.StartsWith(".strlen"))
+                args = args.Substring(".strlen".Length).TrimStart();
+
+            SendMessage(n + ": " + args.Length.ToString(), source);
+        }
+
+        public static void Insult(string args, string source, string n)
+        {
+            if (insult_index == -1)
+            {
+                if (!File.Exists("./insults.txt"))
+                    return;
+
+                var insults_tmp = File.ReadAllLines("./insults.txt").Where(i => i.Trim().Any() && i.Contains("{0}"));
+                insults_tmp = insults_tmp.Distinct();
+
+                if (!insults_tmp.Any())
+                    return;
+
+                Insults = Shuffle(insults_tmp);
+                insult_index = 0;
+            }
+            else
+                insult_index = (insult_index + 1) % Insults.Count;
+
+            SendMessage(string.Format(Insults[insult_index], n), source);
+        }
+
+        static double _btc_rate = 0;
+        static DateTime _btc_last = DateTime.Now.Subtract(TimeSpan.FromDays(1));
+
+        public static double GetBitcoinRate()
+        {
+            if ((DateTime.Now - _btc_last).TotalMinutes < 6)
+                return _btc_rate;
+
+            var response = JObject.Parse(wa_client.DownloadString("https://api.coindesk.com/v1/bpi/currentprice.json"));
+            _btc_rate = response["bpi"]["USD"].Value<double>("rate");
+
+            _btc_last = DateTime.Now;
+
+            return _btc_rate;
+        }
+
+        public static void ExchangeRate(string args, string source, string n)
+        {
+            args = args.Substring(".exc".Length).Trim();
+
+            var parts = args.Split(' ');
+
+            if(!parts.Any(p => double.TryParse(p, out double tmp)))
+            {
+                SendMessage("Sorry, I couldn't understand that. Try something like .exc 100 usd to btc. Known currencies are: " + string.Join(", ", CryptoHandler.Tickers), source);
+                return;
+            }
+
+            var amount = double.Parse(parts.First(p => double.TryParse(p, out double tmp)));
+
+            var eligible = parts.Where(p => CryptoHandler.Tickers.Contains(p.ToUpper())).ToList();
+
+            if(eligible.Count < 2)
+            {
+                SendMessage("Sorry, I couldn't understand that. Try something like .exc 100 usd to btc. Known currencies are: " + string.Join(", ", CryptoHandler.Tickers), source);
+                return;
+            }
+
+            try
+            {
+                SendMessage(CryptoHandler.Convert(eligible[0], eligible[1], amount), source);
+            }
+            catch (Exception ex)
+            {
+                SendMessage(string.Format("Exception occurred: {0}", ex.Message), source);
+            }
+        }
+
+        public static void BtcRate(string args, string source, string n)
+        {
+            args = args.Substring(".btc".Length).Trim();
+
+            double rate = GetBitcoinRate();
+
+            double minutes =
+                (DateTime.Now - _btc_last).TotalMinutes;
+
+            string last_update =
+                minutes < 0.01 ? "now" :
+                minutes < 1 ? "less than a minute ago" :
+                minutes < 1.99 ? "1 minute ago" :
+                ((int)minutes).ToString() + " minutes ago";
+
+            if (double.TryParse(args, out double btc_amount))
+            {
+                SendMessage(string.Format("{0} BTC = 3${1:0.00} USD (1 BTC = 3${2:0.00} USD, updated {3}{4})", btc_amount, btc_amount * rate, rate, last_update,
+                    btc_amount == 1 ? ". psst, 2.btc 1 is the same as 2.btc" : ""), source);
+                return;
+            }
+
+            args = args.TrimStart('$');
+
+            if(double.TryParse(args, out double usd_amount))
+            {
+                SendMessage(string.Format("3${0} USD = {1:0.0000} BTC (1 BTC = 3${2:0.00} USD, updated {3})", usd_amount, usd_amount / rate, rate, last_update), source);
+                return;
+            }
+
+            SendMessage(string.Format("1 BTC = 3${0:0.00} USD, updated {1}", rate, last_update), source);
+        }
+
+        public static bool PrefersMetric(string nick)
+        {
+            if (!Config.Contains("wolfram.units", n => n.Value<string>().StartsWith(nick), out JToken token))
+                return Config.GetValue<bool>("wolfram.metric");
+
+            return token.Value<string>().Split(':')[1] == "metric";
+        }
+
+        public static void GetUnits(string args, string source, string n)
+        {
+            SendMessage(string.Format("You are currently using {0} units.", PrefersMetric(n) ? "metric" : "imperial"), source);
+        }
+
+        public static void SetUnits(string args, string source, string n)
+        {
+            args = args.Substring(1).Trim().ToLower();
+
+            try
+            {
+                if (args == "imperial")
+                {
+                    if (Config.Contains("wolfram.units", t => t.Value<string>().StartsWith(n), out JToken token))
+                    {
+                        Console.WriteLine("Removed {0}", token);
+                        Config.Remove("wolfram.units", token);
+                    }
+
+                    Config.Add("wolfram.units", n + ":imperial");
+                    SendMessage(string.Format("You are currently using {0} units.", PrefersMetric(n) ? "metric" : "imperial"), source);
+                }
+                else if (args == "metric")
+                {
+                    if (Config.Contains("wolfram.units", t => t.Value<string>().StartsWith(n), out JToken token))
+                    {
+                        Console.WriteLine("Removed {0}", token);
+                        Config.Remove("wolfram.units", token);
+                    }
+
+                    Config.Add("wolfram.units", n + ":metric");
+                    SendMessage(string.Format("You are currently using {0} units.", PrefersMetric(n) ? "metric" : "imperial"), source);
+                }
+
+                Config.Save();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+            }
+        }
+
+        public static void Help(string args, string source, string n)
+        {
+            SendMessage("See http://hexafluoride.dryfish.net/help for help.", source);
+        }
+
+        public static void Source(string args, string source, string n)
+        {
+            string real_source = source;
+            source = GetSource(source);
+            args = args.Substring(".source".Length);
+
+            if (!CommentSources.ContainsKey(source) || !CommentSources[source].Any())
+            {
+                SendMessage("My skynet module hasn't been triggered in this channel yet. Try again later!", real_source);
+                return;
+            }
+
+            var list = CommentSources[source];
+
+            if(int.TryParse(args, out int count))
+            {
+                if (list.Count >= count && count > 0)
+                {
+                    SendMessage(list[(list.Count - count)], real_source);
+                    return;
+                }
+            }
+
+            SendMessage(list.Last(), real_source);
+        }
+
+        public static void TwitterSearch(string args, string source, string n)
+        {
+            args = args.Substring("?tw".Length).Trim();
+
+            var tweet = Twitter.GetSearchResult(args);
+
+            SendMessage(tweet, source);
         }
 
         public static void UrbanSearch(string args, string source, string n)
@@ -510,39 +1026,219 @@ namespace Fun
         static WebClient ud_client = new WebClient();
         static WebClient wa_client = new WebClient();
 
+        static List<string> preferred_pods = new List<string>()
+            {
+                "Result",
+                "Values",
+            };
+
+        static List<string> preferred_scanners = new List<string>()
+        {
+            "Series"
+        };
+
+        static string MakeWolframQuery(string query, bool metric = true, bool images = false)
+        {
+            return wa_client.DownloadString(string.Format("https://api.wolframalpha.com/v2/query?appid={0}&input={1}&output=json&format={3}plaintext&units={2}", Config.GetString("wolfram.key"), HttpUtility.UrlEncode(query), metric ? "metric" : "nonmetric", images ? "image," : ""));
+        }
+
         public static void Wolfram(string args, string source, string n)
         {
+            if (args.StartsWith(">waplot"))
+                return;
+
             string query = args.Substring(".wa".Length).Trim();
             string result = "";
 
+            string suggestion = "";
+
             try
             {
-                string response = wa_client.DownloadString(string.Format("https://api.wolframalpha.com/v2/query?appid={0}&input={1}&output=json&includepodid=Input&includepodid=Result&format=plaintext", Config.GetString("wolfram.key"), HttpUtility.UrlEncode(query)));
+                string response = MakeWolframQuery(query, PrefersMetric(n));
                 var obj = JObject.Parse(response);
 
-                if (!obj["queryresult"].Value<bool>("success"))
+                var queryresult = obj["queryresult"];
+
+                if (!queryresult.Value<bool>("success")) // check for did you means
                 {
-                    throw new Exception();
+                    if (queryresult["didyoumeans"] != null)
+                    {
+                        if (queryresult["didyoumeans"].Type == JTokenType.Array)
+                        {
+                            suggestion = queryresult["didyoumeans"].OrderByDescending(p => p.Value<double>("score")).First().Value<string>("val");
+                        }
+                        else
+                            suggestion = queryresult["didyoumeans"].Value<string>("val");
+
+                        response = MakeWolframQuery(suggestion, PrefersMetric(n));
+                        obj = JObject.Parse(response);
+                        queryresult = obj["queryresult"];
+                    }
+                    else
+                        throw new Exception();
                 }
 
-                var pods = obj["queryresult"]["pods"];
+                var pods = queryresult["pods"];
 
+                JToken result_pod = null;
+
+                for (int i = 0; i < preferred_pods.Count; i++)
+                {
+                    string pod_id = preferred_pods[i];
+
+                    if (pods.Any(p => p.Value<string>("id") == pod_id))
+                    {
+                        result_pod = pods.First(p => p.Value<string>("id") == pod_id);
+                        break;
+                    }
+                }
+
+                if (result_pod == null)
+                {
+                    for (int i = 0; i < preferred_scanners.Count; i++)
+                    {
+                        string scanner_id = preferred_scanners[i];
+
+                        if (pods.Any(p => p.Value<string>("scanner") == scanner_id))
+                        {
+                            result_pod = pods.First(p => p.Value<string>("scanner") == scanner_id);
+                            break;
+                        }
+                    }
+                }
+
+                if (result_pod == null && pods.Any(p => p.Value<string>("id") != "Input"))
+                {
+                    result_pod = pods.First(p => p.Value<string>("id") != "Input");
+                }
+                //var input_pod = preferred_pods.First(pods.Any(p => p.Value<string>("id") == "Input");
                 var input_pod = pods.First(p => p.Value<string>("id") == "Input");
-                var result_pod = pods.First(p => p.Value<string>("id") == "Result");
 
-                result = string.Format("10{0} = 12{1}", input_pod["subpods"].First.Value<string>("plaintext"), result_pod["subpods"].First.Value<string>("plaintext"));
+                result = string.Format("10{0} = 12{1}", input_pod["subpods"].First.Value<string>("plaintext"), result_pod["subpods"].First.Value<string>("plaintext").Replace("\n", " "));
+
+                if (suggestion != "")
+                    result += string.Format(" (suggested as 11did you mean \"{0}\"12)", suggestion);
             }
-            catch
+            catch (Exception ex)
             {
                 try
                 {
                     result = wa_client.DownloadString(string.Format("https://api.wolframalpha.com/v1/result?appid={0}&i={1}&units=metric", Config.GetString("wolfram.key"), HttpUtility.UrlEncode(query)));
                 }
-                catch
+                catch (Exception ex2)
                 {
                     SendMessage("[4Wolfram] 4Couldn't display answer", source);
+                    Console.WriteLine(ex);
+                    Console.WriteLine(ex2);
                     return;
                 }
+            }
+
+            SendMessage(string.Format("[4Wolfram] {1}", n, result), source);
+        }
+
+        public static void WolframPlot(string args, string source, string n)
+        {
+            List<string> preferred_pods = new List<string>()
+            {
+                "Plot",
+                "Result",
+            };
+
+            List<string> preferred_scanners = new List<string>()
+            {
+                "Plotter"
+            };
+
+            if (args.StartsWith(">plot"))
+                args = args.Substring(">plot".Length).Trim();
+            else
+                args = args.Substring(".waplot".Length).Trim();
+
+            string query = args;
+            string result = "";
+
+            string suggestion = "";
+
+            try
+            {
+                string response = MakeWolframQuery(query, PrefersMetric(n), true);
+                var obj = JObject.Parse(response);
+
+                var queryresult = obj["queryresult"];
+
+                if (!queryresult.Value<bool>("success")) // check for did you means
+                {
+                    if (queryresult["didyoumeans"] != null)
+                    {
+                        if (queryresult["didyoumeans"].Type == JTokenType.Array)
+                        {
+                            suggestion = queryresult["didyoumeans"].OrderByDescending(p => p.Value<double>("score")).First().Value<string>("val");
+                        }
+                        else
+                            suggestion = queryresult["didyoumeans"].Value<string>("val");
+
+                        response = MakeWolframQuery(suggestion, PrefersMetric(n), true);
+                        obj = JObject.Parse(response);
+                        queryresult = obj["queryresult"];
+                    }
+                    else
+                        throw new Exception();
+                }
+
+                var pods = queryresult["pods"];
+
+                JToken result_pod = null;
+
+                for (int i = 0; i < preferred_pods.Count; i++)
+                {
+                    string pod_id = preferred_pods[i];
+
+                    if (pods.Any(p => p.Value<string>("id") == pod_id))
+                    {
+                        result_pod = pods.First(p => p.Value<string>("id") == pod_id);
+                        break;
+                    }
+                }
+
+                if (result_pod == null)
+                {
+                    for (int i = 0; i < preferred_scanners.Count; i++)
+                    {
+                        string scanner_id = preferred_scanners[i];
+
+                        if (pods.Any(p => p.Value<string>("scanner") == scanner_id))
+                        {
+                            result_pod = pods.First(p => p.Value<string>("scanner") == scanner_id);
+                            break;
+                        }
+                    }
+                }
+
+                if (result_pod == null && pods.Any(p => p.Value<string>("id") != "Input"))
+                {
+                    result_pod = pods.First(p => p.Value<string>("id") != "Input");
+                }
+                //var input_pod = preferred_pods.First(pods.Any(p => p.Value<string>("id") == "Input");
+                var input_pod = pods.First(p => p.Value<string>("id") == "Input");
+
+                result = string.Format("plot(10{0}) = {1}", input_pod["subpods"].First.Value<string>("plaintext"), result_pod["subpods"].First["img"].Value<string>("src").Replace("\n", " "));
+
+                if (suggestion != "")
+                    result += string.Format(" (suggested as 11did you mean \"{0}\"12)", suggestion);
+            }
+            catch (Exception ex)
+            {
+                //try
+                //{
+                //    result = wa_client.DownloadString(string.Format("https://api.wolframalpha.com/v1/result?appid={0}&i={1}&units=metric", Config.GetString("wolfram.key"), HttpUtility.UrlEncode(query)));
+                //}
+                //catch (Exception ex2)
+                //{
+                    SendMessage("[4Wolfram] 4Couldn't display answer", source);
+                    Console.WriteLine(ex);
+                    return;
+                //}
             }
 
             SendMessage(string.Format("[4Wolfram] {1}", n, result), source);
@@ -583,17 +1279,117 @@ namespace Fun
 
         static void CheckTells(string args, string source, string n)
         {
+            string real_source = source;
+            source = GetSource(source);
+
             if(RemindManager.SeenTrackedNicks.Contains(n))
                 if (RemindManager.SeenTracker.Any(s => s.Key.Nick == n))
                     foreach (var p in RemindManager.SeenTracker.Where(s => s.Key.Nick == n))
                         p.Value.Set();
 
-            if (ImageSearch.Random.NextDouble() < (1d / Config.GetDouble("skynet.chance")))
+            if (false && ImageSearch.Random.NextDouble() < (1d / Config.GetDouble("skynet.chance")) && !Config.Contains("skynet.disabled", source))
             {
-                string comment = YoutubeUtils.GetComment(args, GetSource(source), n);
+                var tuple = YoutubeUtils.GetComment(args, source, n);
+                string comment = tuple.Item2;
+
                 if (comment.Length > 0)
-                    SendMessage(comment, source);
+                {
+                    SendMessage(comment, real_source);
+
+                    if (!CommentSources.ContainsKey(source))
+                        CommentSources[source] = new List<string>();
+
+                    CommentSources[source].Add(string.Format("{0} | {1}", tuple.Item1, comment));
+                }
             }
+
+            if (args.Contains("spurdo"))
+            {
+                SendMessage(string.Format("{0}, s/spurdo/spürdo/gi", n), real_source);
+            }
+
+            if (args.StartsWith("."))
+            {
+                var ticker = args.Substring(1);
+                var first = ticker.Split(' ')[0];
+
+                if (CryptoHandler.Tickers.Contains(first.ToUpper()))
+                {
+                    var rest = ticker.Split(' ').Skip(1).Select(t => t.Trim()).ToArray();
+
+                    //Console.WriteLine("\"{0}\"", rest[0]);
+
+                    if (rest.Any() && CryptoHandler.LooksLikeAddress(rest[0]))
+                    {
+                        try
+                        {
+                            SendMessage(CryptoHandler.GetAddressInfo(rest[0]), real_source);
+                            goto crypto_end;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine(ex.Message);
+                        }
+                    }
+
+                    if (rest.Any() && CryptoHandler.LooksLikeTxid(rest[0]))
+                    {
+                        try
+                        {
+                            SendMessage(CryptoHandler.GetTransactionInfo(rest[0]), real_source);
+                            goto crypto_end;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine(ex.Message);
+                        }
+                    }
+
+                    if(rest.Any() && (rest[0] == "block" || rest[0] == "latest" || rest[0] == "latestblock" || rest[0] == "last" || rest[0] == "lastblock"))
+                    {
+                        try
+                        {
+                            SendMessage(CryptoHandler.GetLastBlockInfo(), real_source);
+                            goto crypto_end;
+                        }
+                        catch
+                        {
+
+                        }
+                    }
+
+                    if(rest.Any() && (rest[0].ToLower() == "btc"))
+                    {
+                        ExchangeRate(string.Format(".exc 1 {0} to BTC", first), real_source, n);
+                        goto crypto_end;
+                    }
+
+                    double amount = 1;
+                    bool to_usd = true;
+                    bool success = false;
+
+                    for (int i = 0; i < rest.Length; i++)
+                    {
+                        if (rest[i].StartsWith("$") && (success = double.TryParse(rest[i].Substring(1), out amount)))
+                        {
+                            to_usd = false;
+                            break;
+                        }
+                        else if ((success = double.TryParse(rest[i], out amount)))
+                            break;
+                    }
+
+                    if (amount == 0)
+                        amount = 1;
+
+                    if (to_usd)
+                        ExchangeRate(string.Format(".exc {0} {1} to USD", amount, first), real_source, n);
+                    else
+                        ExchangeRate(string.Format(".exc {0} USD to {1}", amount, first), real_source, n);
+                }
+            }
+
+            crypto_end:
 
             var tells = TellManager.GetTells(n);
 
@@ -602,7 +1398,7 @@ namespace Fun
 
             foreach (var tell in tells)
             {
-                SendMessage(tell.ToString(), source);
+                SendMessage(tell.ToString(), real_source);
                 TellManager.Expire(tell);
             }
 
@@ -640,9 +1436,16 @@ namespace Fun
 
                 summary = HttpUtility.HtmlDecode(summary);
 
+                bool cache_hit = false;
+
+                if (cache_hit = summary.EndsWith("(cache hit)"))
+                {
+                    summary = summary.Substring(0, summary.Length - "(cache hit)".Length);
+                }
+
                 sw.Stop();
 
-                SendMessage(string.Format("{0} ({1}s)", summary, sw.Elapsed.TotalSeconds.ToString("0.00")), source);
+                SendMessage(string.Format("{0} ({1}s{2})", summary, sw.Elapsed.TotalSeconds.ToString("0.00"), cache_hit ? "-cache" : ""), source);
             }
             catch
             {
@@ -694,9 +1497,16 @@ namespace Fun
 
                 summary = HttpUtility.HtmlDecode(summary);
 
+                bool cache_hit = false;
+
+                if (cache_hit = summary.EndsWith("(cache hit)"))
+                {
+                    summary = summary.Substring(0, summary.Length - "(cache hit)".Length);
+                }
+
                 sw.Stop();
 
-                SendMessage(string.Format("{0} ({1}s)", summary, sw.Elapsed.TotalSeconds.ToString("0.00")), source);
+                SendMessage(string.Format("{0} ({1}s{2})", summary, sw.Elapsed.TotalSeconds.ToString("0.00"), cache_hit ? "-cache" : ""), source);
             }
             catch (Exception ex)
             {

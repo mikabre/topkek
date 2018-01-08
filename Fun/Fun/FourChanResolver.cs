@@ -41,8 +41,8 @@ namespace Fun
                     System.Threading.Thread.Sleep(1000);
 
                 board.Update();
-                board.AutoUpdateInterval = 600000;
-                board.StartAutoUpdate();
+                //board.AutoUpdateInterval = 600000;
+                //board.StartAutoUpdate();
 
             });
 
@@ -248,7 +248,20 @@ namespace Fun
             {
                 var thread = board.Threads[i];
 
-                for(int k = 0; k < thread.Posts.Count; k++)
+                if (thread.OP.Filename == tim)
+                {
+                    return string.Format(
+                        op_layout,
+                        Bold(thread.OP.SmartSubject) ?? "(no subject)",
+                        board_id,
+                        Utilities.BetterPlural(thread.OP.Replies, "reply", thread.OP.BumpLimit, 8),
+                        Utilities.BetterPlural(thread.OP.Images, "image", thread.OP.ImageLimit, 3),
+                        Utilities.BetterPlural(thread.OP.Posters, "poster", 0, 11),
+                        Utilities.TimeSpanToPrettyString(DateTime.UtcNow - thread.OP.PostTime),
+                        string.Format("https://boards.4chan.org/{0}/thread/{1}", board_id, thread.ID));
+                }
+
+                for (int k = 0; k < thread.Posts.Count; k++)
                 {
                     var post = thread.Posts[k];
 

@@ -46,6 +46,7 @@ namespace Heimdall
 
         public void Start()
         {
+            Console.WriteLine("Started listening on {0}", (IPEndPoint)listener.LocalEndpoint);
             listener.Start();
             Running.Set();
         }
@@ -54,6 +55,8 @@ namespace Heimdall
         {
             listener.Stop();
             Running.Reset();
+
+            Console.WriteLine("Stop listening on {0}", (IPEndPoint)listener.LocalEndpoint);
         }
 
         private void ListenerLoop()

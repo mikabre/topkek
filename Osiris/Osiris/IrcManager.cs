@@ -340,22 +340,7 @@ namespace Osiris
             string msg = e.PrivateMessage.Message;
             bool authed = e.PrivateMessage.User.Nick == client.Owner;
 
-            if(msg.StartsWith("$whatmatches") && authed)
-            {
-                string args = msg.Substring("$whatmatches".Length).Trim();
-
-                foreach(Trigger t in Triggers)
-                {
-                    if(t.Matches(args))
-                    {
-                        client.SendMessage(string.Format("{0}: matches {1}", t.ID, t), e.PrivateMessage.Source);
-                    }
-                }
-
-                return;
-            }
-
-            if(msg.StartsWith("$rehash") && authed)
+            if (msg.StartsWith("$rehash") && authed)
             {
                 foreach (string str in Program.GetModules())
                 {
@@ -365,6 +350,26 @@ namespace Osiris
                 Config.Load();
 
                 client.SendMessage("done", e.PrivateMessage.Source);
+            }
+
+            bool quiet_mode = ((ConnectionOptions)source.Client.Options).Quiet;
+
+            if (!quiet_mode)
+            {
+                if (msg.StartsWith("$whatmatches") && authed)
+                {
+                    string args = msg.Substring("$whatmatches".Length).Trim();
+
+                    foreach (Trigger t in Triggers)
+                    {
+                        if (t.Matches(args))
+                        {
+                            client.SendMessage(string.Format("{0}: matches {1}", t.ID, t), e.PrivateMessage.Source);
+                        }
+                    }
+
+                    return;
+                }
             }
 
             if (!(authed && msg.StartsWith("$")))
@@ -383,235 +388,235 @@ namespace Osiris
                     }
                 }
             }
-            
-            if(msg.ToLower().Contains("spurdo"))
-            {
-                client.SendMessage(string.Format("{0}, s/spurdo/spürdo/gi", e.PrivateMessage.User.Nick), e.PrivateMessage.Source);
-            }
-            else if(msg.StartsWith("$ignoremodule"))
-            {
-                if(authed)
-                {
-                    IgnoreModules.Add(new KeyValuePair<string, string>(msg.Substring("$ignoremodule".Length), e.PrivateMessage.Source));
-                }
-                return;
-            }
-            else if(msg.StartsWith("$meow"))
-            {
-                if (authed)
-                {
-                    int count = int.Parse(msg.Split(' ')[1]);
 
-                    client.SendMessage(MacBotGen.GenerateMacBot(count, true), e.PrivateMessage.Source);
-                }
-                return;
-            }
-            else if(msg.StartsWith("$registered"))
+            if (!quiet_mode)
             {
-                if(authed)
+                if (msg.StartsWith("$ignoremodule"))
+                {
+                    if (authed)
+                    {
+                        IgnoreModules.Add(new KeyValuePair<string, string>(msg.Substring("$ignoremodule".Length), e.PrivateMessage.Source));
+                    }
+                    return;
+                }
+                else if (msg.StartsWith("$meow"))
+                {
+                    if (authed)
+                    {
+                        int count = int.Parse(msg.Split(' ')[1]);
+
+                        client.SendMessage(MacBotGen.GenerateMacBot(count, true), e.PrivateMessage.Source);
+                    }
+                    return;
+                }
+                else if (msg.StartsWith("$registered"))
+                {
+                    if (authed)
+                    {
+                        Task.Factory.StartNew(delegate
+                        {
+                            client.SendMessage(IsRegistered(client, msg.Substring("$registered".Length).Trim()).ToString(), e.PrivateMessage.Source);
+                            return;
+                        });
+                    }
+                }
+                else if (msg.StartsWith(".bang"))
+                {
+                    client.KickUser(e.PrivateMessage.Source, e.PrivateMessage.User.Nick, "There you fucking go");
+                }
+                else if (msg.StartsWith(".permabang"))
                 {
                     Task.Factory.StartNew(delegate
                     {
-                        client.SendMessage(IsRegistered(client, msg.Substring("$registered".Length).Trim()).ToString(), e.PrivateMessage.Source);
+                        client.SendRawMessage("MODE {0} +b *!*@{1}", e.PrivateMessage.Source, e.PrivateMessage.User.Hostname);
+                        client.KickUser(e.PrivateMessage.Source, e.PrivateMessage.User.Nick, "Consequences will never be the same");
+
+                        Thread.Sleep(10000);
+
+                        client.SendRawMessage("MODE {0} -b *!*@{1}", e.PrivateMessage.Source, e.PrivateMessage.User.Hostname);
+                        client.InviteUser(e.PrivateMessage.Source, e.PrivateMessage.User.Nick);
+                    });
+                }
+                else if (msg.StartsWith("$unignoremodule"))
+                {
+                    if (authed)
+                    {
+                        IgnoreModules.RemoveAll(p => p.Value == e.PrivateMessage.Source && p.Key == msg.Substring("$unignoremodule".Length));
+                    }
+                    return;
+                }
+                else if (msg.StartsWith(".prebots"))
+                {
+                    if (authed)
+                    {
+                        client.SendMessage("Reporting in! [C#] https://github.com/hexafluoride/topkek", msg.Split(' ')[1]);
+                        LastBots = DateTime.Now;
+                    }
+                    return;
+                }
+                else if (msg.StartsWith("$addtrigger"))
+                {
+                    if (authed)
+                    {
+                        Trigger trigger = Trigger.ParseTrigger(msg.Substring("$addtrigger".Length));
+                        Triggers.Add(trigger);
+
+                        client.SendMessage(string.Format("Use 11$removetrigger {0} to remove this trigger.", trigger.ID), e.PrivateMessage.Source);
+                    }
+                    return;
+                }
+                else if (msg.StartsWith("$removetrigger"))
+                {
+                    if (authed)
+                    {
+                        string ID = msg.Substring("$removetrigger".Length).Trim();
+
+                        Triggers.RemoveAll(t => t.ID == ID);
+                        client.SendMessage(string.Format("Removed trigger 11{0}.", ID), e.PrivateMessage.Source);
+                    }
+                    return;
+                }
+                else if (msg.StartsWith(".bots"))
+                {
+                    if ((DateTime.Now - LastBots).TotalSeconds < 3)
                         return;
-                    });
-                }
-            }
-            else if(msg.StartsWith(".bang"))
-            {
-                client.KickUser(e.PrivateMessage.Source, e.PrivateMessage.User.Nick, "There you fucking go");
-            }
-            else if(msg.StartsWith(".permabang"))
-            {
-                Task.Factory.StartNew(delegate
-                {
-                    client.SendRawMessage("MODE {0} +b *!*@{1}", e.PrivateMessage.Source, e.PrivateMessage.User.Hostname);
-                    client.KickUser(e.PrivateMessage.Source, e.PrivateMessage.User.Nick, "Consequences will never be the same");
-
-                    Thread.Sleep(10000);
-                    
-                    client.SendRawMessage("MODE {0} -b *!*@{1}", e.PrivateMessage.Source, e.PrivateMessage.User.Hostname);
-                    client.InviteUser(e.PrivateMessage.Source, e.PrivateMessage.User.Nick);
-                });
-            }
-            else if(msg.StartsWith("$unignoremodule"))
-            {
-                if(authed)
-                {
-                    IgnoreModules.RemoveAll(p => p.Value == e.PrivateMessage.Source && p.Key == msg.Substring("$unignoremodule".Length));
-                }
-                return;
-            }
-            else if(msg.StartsWith(".prebots"))
-            {
-                if(authed)
-                {
-                    client.SendMessage("Reporting in! [C#] https://github.com/hexafluoride/topkek", msg.Split(' ')[1]);
-                    LastBots = DateTime.Now;
-                }
-                return;
-            }
-            else if(msg.StartsWith("$addtrigger"))
-            {
-                if(authed)
-                {
-                    Trigger trigger = Trigger.ParseTrigger(msg.Substring("$addtrigger".Length));
-                    Triggers.Add(trigger);
-
-                    client.SendMessage(string.Format("Use 11$removetrigger {0} to remove this trigger.", trigger.ID), e.PrivateMessage.Source);
-                }
-                return;
-            }
-            else if(msg.StartsWith("$removetrigger"))
-            {
-                if(authed)
-                {
-                    string ID = msg.Substring("$removetrigger".Length).Trim();
-
-                    Triggers.RemoveAll(t => t.ID == ID);
-                    client.SendMessage(string.Format("Removed trigger 11{0}.", ID), e.PrivateMessage.Source);
-                }
-                return;
-            }
-            else if (msg.StartsWith(".bots"))
-            {
-                if ((DateTime.Now - LastBots).TotalSeconds < 3)
+                    client.SendMessage("Reporting in! [C#]", e.PrivateMessage.Source);
                     return;
-                client.SendMessage("Reporting in! [C#]", e.PrivateMessage.Source);
-                return;
-            }
-            else if (msg == "$leave")
-            {
-                if (authed)
-                {
-                    client.PartChannel(e.PrivateMessage.Source, "Bye!");
                 }
-                return;
-            }
-            else if(msg.StartsWith("$say"))
-            {
-                if(authed)
+                else if (msg == "$leave")
                 {
-                    client.SendMessage(msg.Substring("$say".Length).Trim(), e.PrivateMessage.Source);
-                }
-                return;
-            }
-            else if(msg.StartsWith("$raw"))
-            {
-                if(authed)
-                {
-                    client.SendRawMessage(msg.Substring("$raw".Length).Trim());
-                }
-                return;
-            }
-            else if (msg == "^")
-            {
-                client.SendMessage("can confirm", e.PrivateMessage.Source);
-                return;
-            }
-            else if (msg.StartsWith("$join"))
-            {
-                if (authed)
-                {
-                    client.JoinChannel(msg.Substring(".join".Length).Trim());
-                }
-                return;
-            }
-            else if(msg.StartsWith("$macbot"))
-            {
-                if (authed)
-                {
-                    int count = int.Parse(msg.Split(' ')[1]);
-
-                    client.SendMessage(MacBotGen.GenerateMacBot(count), e.PrivateMessage.Source);
-                }
-                return;
-            }
-            else if(msg.StartsWith("rape"))
-            {
-                msg = msg.Trim();
-                
-                if (!msg.Contains(" "))
+                    if (authed)
+                    {
+                        client.PartChannel(e.PrivateMessage.Source, "Bye!");
+                    }
                     return;
-
-                if (!client.Channels[e.PrivateMessage.Source].Users.Any(user => user.Nick == msg.Split(' ')[1]))
-                    return;
-
-                string nick = msg.Split(' ')[1];
-
-                client.SendAction(string.Format("rapes {0}", nick), e.PrivateMessage.Source);
-            }
-            else if (msg.ToLower() == "who's a healer slut" || msg.ToLower() == "who's the healer slut")
-            {
-                client.SendMessage(string.Format("I-I am, {0}~", e.PrivateMessage.User.Nick), e.PrivateMessage.Source);
-            }
-            else if(MatchesHealRequest(msg) && !dontheal.Contains(e.PrivateMessage.User.Nick))
-            {
-                msg = msg.Trim();
-
-                string nick = e.PrivateMessage.User.Nick;
-
-                if(msg.Contains(" "))
-                {
-                    if(client.Channels[e.PrivateMessage.Source].Users.Any(user => user.Nick == msg.Split(' ')[1] && !dontheal.Contains(user.Nick)))
-                        nick = msg.Split(' ')[1];
                 }
-                double rnd = MacBotGen.Random.NextDouble();
-                if (msg.ToLower().EndsWith("slut") || msg.ToLower().EndsWith("whore") || msg.ToLower().EndsWith("bıtch") || msg.ToLower().EndsWith("bitch"))
+                else if (msg.StartsWith("$say"))
                 {
-                    if (rnd < 0.9 && !authed)
-                        client.SendAction(string.Format("h-heals {0} (3+{1} HP~!)", nick, MacBotGen.Random.Next(90, 110)), e.PrivateMessage.Source);
+                    if (authed)
+                    {
+                        client.SendMessage(msg.Substring("$say".Length).Trim(), e.PrivateMessage.Source);
+                    }
+                    return;
+                }
+                else if (msg.StartsWith("$raw"))
+                {
+                    if (authed)
+                    {
+                        client.SendRawMessage(msg.Substring("$raw".Length).Trim());
+                    }
+                    return;
+                }
+                else if (msg == "^")
+                {
+                    client.SendMessage("can confirm", e.PrivateMessage.Source);
+                    return;
+                }
+                else if (msg.StartsWith("$join"))
+                {
+                    if (authed)
+                    {
+                        client.JoinChannel(msg.Substring(".join".Length).Trim());
+                    }
+                    return;
+                }
+                else if (msg.StartsWith("$macbot"))
+                {
+                    if (authed)
+                    {
+                        int count = int.Parse(msg.Split(' ')[1]);
+
+                        client.SendMessage(MacBotGen.GenerateMacBot(count), e.PrivateMessage.Source);
+                    }
+                    return;
+                }
+                else if (msg.StartsWith("rape"))
+                {
+                    msg = msg.Trim();
+
+                    if (!msg.Contains(" "))
+                        return;
+
+                    if (!client.Channels[e.PrivateMessage.Source].Users.Any(user => user.Nick == msg.Split(' ')[1]))
+                        return;
+
+                    string nick = msg.Split(' ')[1];
+
+                    client.SendAction(string.Format("rapes {0}", nick), e.PrivateMessage.Source);
+                }
+                else if (msg.ToLower() == "who's a healer slut" || msg.ToLower() == "who's the healer slut")
+                {
+                    client.SendMessage(string.Format("I-I am, {0}~", e.PrivateMessage.User.Nick), e.PrivateMessage.Source);
+                }
+                else if (MatchesHealRequest(msg) && !dontheal.Contains(e.PrivateMessage.User.Nick))
+                {
+                    msg = msg.Trim();
+
+                    string nick = e.PrivateMessage.User.Nick;
+
+                    if (msg.Contains(" "))
+                    {
+                        if (client.Channels[e.PrivateMessage.Source].Users.Any(user => user.Nick == msg.Split(' ')[1] && !dontheal.Contains(user.Nick)))
+                            nick = msg.Split(' ')[1];
+                    }
+                    double rnd = MacBotGen.Random.NextDouble();
+                    if (msg.ToLower().EndsWith("slut") || msg.ToLower().EndsWith("whore") || msg.ToLower().EndsWith("bıtch") || msg.ToLower().EndsWith("bitch"))
+                    {
+                        if (rnd < 0.9 && !authed)
+                            client.SendAction(string.Format("h-heals {0} (3+{1} HP~!)", nick, MacBotGen.Random.Next(90, 110)), e.PrivateMessage.Source);
+                        else
+                            client.SendAction(string.Format("h-heals {0} (3+{1} HP~! Critical heal~!)", nick, MacBotGen.Random.Next(250, 300)), e.PrivateMessage.Source);
+                    }
                     else
-                        client.SendAction(string.Format("h-heals {0} (3+{1} HP~! Critical heal~!)", nick, MacBotGen.Random.Next(250, 300)), e.PrivateMessage.Source);
-                }
-                else
-                {
-                    if (rnd < 0.9 && !authed)
-                        client.SendAction(string.Format("heals {0} (3+{1} HP!)", nick, MacBotGen.Random.Next(90, 110)), e.PrivateMessage.Source);
-                    else
-                        client.SendAction(string.Format("heals {0} (3+{1} HP! Critical heal!)", nick, MacBotGen.Random.Next(250, 300)), e.PrivateMessage.Source);
-                }
+                    {
+                        if (rnd < 0.9 && !authed)
+                            client.SendAction(string.Format("heals {0} (3+{1} HP!)", nick, MacBotGen.Random.Next(90, 110)), e.PrivateMessage.Source);
+                        else
+                            client.SendAction(string.Format("heals {0} (3+{1} HP! Critical heal!)", nick, MacBotGen.Random.Next(250, 300)), e.PrivateMessage.Source);
+                    }
 
-                return;
-            }
-            else if (msg.StartsWith("$spam"))
-            {
-                if (authed)
+                    return;
+                }
+                else if (msg.StartsWith("$spam"))
                 {
-                    int amount = int.Parse(msg.Split(' ')[1]);
+                    if (authed)
+                    {
+                        int amount = int.Parse(msg.Split(' ')[1]);
 
-                    Task.Factory.StartNew(delegate {
-                        for(int i = 0; i < amount; i++)
+                        Task.Factory.StartNew(delegate
                         {
-                            client.SendMessage(GenerateRandom(), e.PrivateMessage.Source);
-                            System.Threading.Thread.Sleep(1000);
-                        }
-                    });
+                            for (int i = 0; i < amount; i++)
+                            {
+                                client.SendMessage(GenerateRandom(), e.PrivateMessage.Source);
+                                System.Threading.Thread.Sleep(1000);
+                            }
+                        });
+                    }
                 }
-            }
 
-            if (msg.StartsWith("$ignore"))
-            {
-                if (authed)
+                if (msg.StartsWith("$ignore"))
                 {
-                    string nick = msg.Substring(".ignore".Length).Trim();
+                    if (authed)
+                    {
+                        string nick = msg.Substring(".ignore".Length).Trim();
 
-                    Config.Add("ignored", id + "/" + nick);
-                    Config.Save();
-                    //Ignore.Add(msg.Substring(".ignore".Length).Trim());
+                        Config.Add("ignored", id + "/" + nick);
+                        Config.Save();
+                        //Ignore.Add(msg.Substring(".ignore".Length).Trim());
+                    }
+                    return;
                 }
-                return;
-            }
-            else if (msg.StartsWith("$unignore"))
-            {
-                if(authed)
+                else if (msg.StartsWith("$unignore"))
                 {
-                    string nick = msg.Substring(".unignore".Length).Trim();
+                    if (authed)
+                    {
+                        string nick = msg.Substring(".unignore".Length).Trim();
 
-                    Config.Remove("ignored", id + "/" + nick);
-                    Config.Save();
+                        Config.Remove("ignored", id + "/" + nick);
+                        Config.Save();
+                    }
+                    return;
                 }
-                return;
             }
 
             Token token = TokenManager.GetToken(new MessageSource(client, e.PrivateMessage.Source));

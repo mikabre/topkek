@@ -30,6 +30,17 @@ namespace Fun
             return string.Format("{2}{0}{3} {1}s", Italics(amount, italics), unit, color > -1 ? "" + color.ToString("00") : "", color > -1 ? "" : "");
         }
 
+        public static string ShortHand(TimeSpan span)
+        {
+            if (span.TotalHours > 1)
+                return string.Format("{0}h", (int)span.TotalHours);
+
+            if (span.TotalMinutes > 1)
+                return string.Format("{0}m", (int)span.TotalMinutes);
+            
+            return string.Format("{0}s", (int)span.TotalSeconds);
+        }
+
         public static string TimeSpanToPrettyString(TimeSpan span)
         {
             Dictionary<string, int> lengths = new Dictionary<string, int>()

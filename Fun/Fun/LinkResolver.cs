@@ -12,6 +12,7 @@ using System.Drawing;
 
 using Google.Apis;
 using Osiris;
+using System.Threading;
 
 namespace Fun
 {
@@ -88,6 +89,21 @@ namespace Fun
                 input = input.Substring(0, 500) + "...";
 
             return input;
+        }
+
+        public static KeyValuePair<string, string> GetSummaryWithTimeout(string url, int timeout = 3000)
+        {
+            KeyValuePair<string, string> result = new KeyValuePair<string, string>();
+            ManualResetEvent reset = new ManualResetEvent(false);
+
+            Task.Factory.StartNew(
+                delegate {
+                    result = GetSummary(url).Result;
+                    reset.Set();
+                });
+
+            reset.WaitOne(timeout);
+            return result;
         }
 
         public static async Task<KeyValuePair<string, string>> GetSummary(string url, bool debug = false)
@@ -285,7 +301,9 @@ namespace Fun
                 { " inches of uncompressed DDS-2 tape({0})", 846667d },
                 { " seconds of Bell 202 audio({0})", 150d },
                 { " square millimeters of CD({0})", 174000d },
-                { " times jquery-3.1.0.min.js({0})", 86351d }
+                { " times jquery-3.1.0.min.js({0})", 86351d },
+                { " copies of Adolf Hitler on Wikipedia({0})", 154669d },
+                { " Base64-encoded tweets({0})", 105d }
             };
 
             var pair = Units.ElementAt(rnd.Next(Units.Count));

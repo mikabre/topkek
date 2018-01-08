@@ -70,8 +70,8 @@ namespace Fun
                 ApplicationName = Config.GetString("youtube.appname")
             });
 
-            Adapter = new PosNounPhraseParser("./models");
-            Adapter.WarmUpModels();
+            //Adapter = new PosNounPhraseParser("./models");
+            //Adapter.WarmUpModels();
 
             MemeLog = new StreamWriter("./privacy-meme.log", true);
         }
@@ -179,7 +179,7 @@ namespace Fun
             }
         }
 
-        public static string GetComment(string raw, string source, string nick)
+        public static Tuple<string, string> GetComment(string raw, string source, string nick)
         {
             if (Service == null)
                 LoadKeys();
@@ -187,12 +187,12 @@ namespace Fun
             var phrases = Adapter.GetNounPhrases(raw);
 
             if (!phrases.Any())
-                return "";
+                return new Tuple<string, string>("", "");
 
             var longest = phrases.OrderByDescending(p => p.Length).First().Trim();
 
             if (longest.Length == 0)
-                return "";
+                return new Tuple<string, string>("", "");
 
             MemeLog.WriteLine("{0} [{1}] <{2}> {3} | Translated into: \"{4}\"", DateTime.UtcNow.ToString(), source, nick, raw, longest);
             MemeLog.Flush();
@@ -214,15 +214,16 @@ namespace Fun
             }
 
             if (id == "")
-                return "";
+                return new Tuple<string, string>("", "");
 
             var req = Service.CommentThreads.List("snippet");
             req.VideoId = id;
             req.TextFormat = CommentThreadsResource.ListRequest.TextFormatEnum.PlainText;
             
             var resp = req.Execute();
+            var comment = resp.Items[ImageSearch.Random.Next(resp.Items.Count)].Snippet.TopLevelComment;
 
-            return resp.Items[ImageSearch.Random.Next(resp.Items.Count)].Snippet.TopLevelComment.Snippet.TextDisplay.ToString();
+            return new Tuple<string, string>(string.Format("https://youtube.com/watch?v={0}&lc={1}", id, comment.Id), comment.Snippet.TextDisplay.ToString());
         }
 
         public static string ConditionalPlural(double val, string noun)

@@ -9,6 +9,7 @@ using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Runtime.Serialization;
 using System.Globalization;
+using System.Threading;
 
 namespace Osiris
 {
@@ -30,19 +31,32 @@ namespace Osiris
             Config.Load();
 
             string host = "localhost";
+            int port = 9933;
 
-            if (args.Any())
+            if (args.Any(a => !a.StartsWith("--")))
             {
-                host = args[0];
+                host = args.First(a => !a.StartsWith("--"));
+
+                if (host.Contains(':'))
+                {
+                    var parts = host.Split(':');
+                    host = parts[0];
+                    port = int.Parse(parts[1]);
+                }
             }
 
-            ConnectionInit(host);
+            ConnectionInit(host, port);
 
             if (act != null)
                 act();
 
             while (true)
             {
+                if(args.Any() && args[0] == "--daemon")
+                {
+                    Thread.Sleep(int.MaxValue);
+                }
+
                 string str = Console.ReadLine();
                 if (str == "quit")
                 {
@@ -55,9 +69,9 @@ namespace Osiris
             }
         }
 
-        public static void ConnectionInit(string host)
+        public static void ConnectionInit(string host, int port = 9933)
         {
-            Connection = new ConnectionToRouter(host, 9933, Name);
+            Connection = new ConnectionToRouter(host, port, Name);
 
             Connection.AddHandler("message", CallMatcher);
             Connection.AddHandler("get_uptime", GetUptime);

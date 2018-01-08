@@ -22,7 +22,31 @@ namespace Vindler
 
         static void Main(string[] args)
         {
-            Listener listener = new Listener(IPAddress.Loopback, 9933);
+            IPAddress addr = IPAddress.Loopback;
+            int port = 9933;
+
+            if(args.Any())
+            {
+                int temp_port = -1;
+                IPAddress temp_addr = IPAddress.Loopback;
+
+                if(int.TryParse(args[0], out temp_port))
+                {
+                    port = temp_port;
+                }
+                else if(IPAddress.TryParse(args[0], out temp_addr))
+                {
+                    addr = temp_addr;
+                }
+                else
+                {
+                    var parts = args[0].Split(':');
+                    addr = IPAddress.Parse(parts[0]);
+                    port = int.Parse(parts[1]);
+                }
+            }
+
+            Listener listener = new Listener(addr, port);
 
             listener.NewConnection += listener_NewConnection;
             listener.Start();

@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,8 +14,68 @@ namespace Fun
         public List<CacheItem> List = new List<CacheItem>();
         public static TimeSpan DefaultExpiry = TimeSpan.FromDays(1);
 
+        public ulong RequestCount { get; set; }
+        public ulong HitCount { get; set; }
+
+        public void Load()
+        {
+            if (!File.Exists("./cache"))
+                return;
+
+            try
+            {
+                var formatter = new BinaryFormatter();
+                using (FileStream fs = new FileStream("./cache", FileMode.OpenOrCreate))
+                {
+                    List = (List<CacheItem>)formatter.Deserialize(fs);
+                }
+
+                LoadStats();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Failed to load cache.");
+                Console.WriteLine(ex);
+            }
+        }
+
+        public void Save()
+        {
+            try
+            {
+                var formatter = new BinaryFormatter();
+                using (FileStream fs = new FileStream("./cache", FileMode.OpenOrCreate))
+                {
+                    formatter.Serialize(fs, List);
+                }
+
+                SaveStats();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Failed to save cache.");
+                Console.WriteLine(ex);
+            }
+        }
+
+        public void LoadStats()
+        {
+            if (!File.Exists("./cache-stats"))
+                return;
+
+            var stats = File.ReadAllLines("./cache-stats");
+            RequestCount = ulong.Parse(stats[0]);
+            HitCount = ulong.Parse(stats[1]);
+        }
+
+        public void SaveStats()
+        {
+            File.WriteAllLines("./cache-stats", new string[] { RequestCount.ToString(), HitCount.ToString() });
+        }
+
         public TimedCache()
         {
+            Load();
             Task.Factory.StartNew(PurgeLoop);
         }
 
@@ -21,14 +83,16 @@ namespace Fun
         {
             while(true)
             {
-                List.RemoveAll(item => item.Expired());
-                Thread.Sleep(1000);
+                if (List.RemoveAll(item => item.Expired()) > 0)
+                    Save();
+
+                Thread.Sleep(10000);
             }
         }
 
         public void Add(string id, string content, TimeSpan expiry)
         {
-            var item = Get(id);
+            var item = Get(id, true);
 
             if (item != null)
             {
@@ -37,13 +101,24 @@ namespace Fun
             }
 
             List.Add(new CacheItem(id, content, expiry));
+            Save();
         }
 
-        public CacheItem Get(string id)
+        public CacheItem Get(string id, bool add = false)
         {
+            if (!add)
+                RequestCount++;
+
             foreach (var item in List)
+            {
                 if (item.ID == id)
+                {
+                    if (!add)
+                        HitCount++;
+
                     return item;
+                }
+            }
 
             return null;
         }
@@ -60,12 +135,18 @@ namespace Fun
         }
     }
 
+    [Serializable]
     public class CacheItem
     {
         public string ID { get; set; }
         public string Content { get; set; }
         public DateTime Added { get; set; }
         public TimeSpan Expiry { get; set; }
+
+        public CacheItem()
+        {
+
+        }
 
         public CacheItem(string id, string content, TimeSpan expires)
         {

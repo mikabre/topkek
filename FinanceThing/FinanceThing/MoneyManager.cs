@@ -9,6 +9,8 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Newtonsoft.Json.Linq;
+using Osiris;
+using ProbablyFair;
 
 namespace FinanceThing
 {
@@ -37,9 +39,9 @@ namespace FinanceThing
         {
             while (true)
             {
-                var added = DateTime.Now.AddDays(1);
+                var added = DateTime.UtcNow.AddDays(1);
                 var dt = new DateTime(added.Year, added.Month, added.Day, 0, 0, 0);
-                var wait = (dt - DateTime.Now);
+                var wait = (dt - DateTime.UtcNow);
 
                 Console.WriteLine("Sleeping until {0} for {1}", dt, wait);
 
@@ -47,10 +49,22 @@ namespace FinanceThing
 
                 lock (Transactions)
                 {
-                    Save();
+                    Save(true);
                     Transactions.Clear();
-                    File.Move("./transactions", "./transaction-backups/transactions-" + DateTime.Now.ToString("yyyy-dd-MM-HH-mm-ss"));
-                    File.Move("./save", "./transaction-backups/save-" + DateTime.Now.ToString("yyyy-dd-MM-HH-mm-ss"));
+
+                    string filename = DateTime.Now.ToString("yyyy-MM-dd");
+                    string yesterday_filename = DateTime.Now.AddDays(0).ToString("yyyy-MM-dd");
+
+                    File.Move("./transactions", "./transaction-backups/transactions-" + filename);
+                    File.Move("./save", "./transaction-backups/save-" + filename);
+
+                    File.Move("./generator", Path.Combine(Config.GetString("generator.directory"), yesterday_filename + "-" + Program.Random.HashedName));
+                    File.WriteAllText(Path.Combine(Config.GetString("generator.directory"), "latest.txt"), "http://hexafluoride.dryfish.net/audit-files/" + yesterday_filename + "-" + Program.Random.HashedName);
+                    
+                    File.Copy(Path.Combine(Config.GetString("generator.directory"), yesterday_filename + "-" + Program.Random.HashedName), Path.Combine(Config.GetString("generator.directory"), "latest"), true);
+                    File.WriteAllText(Path.Combine(Config.GetString("generator.directory"), "index.html"), IndexGenerator.FromDirectory(Config.GetString("generator.directory")));
+                    Program.Random = GeneratorManager.Create();
+
                     Console.WriteLine("Cycled out transactions file");
                 }
 
@@ -108,6 +122,8 @@ namespace FinanceThing
 
                 if (new FileInfo("./temp-save").Length != 0)
                     File.Copy("./temp-save", "./save", true);
+
+                Program.Random.Save("./generator");
             }
         }
 
@@ -116,6 +132,17 @@ namespace FinanceThing
             IFormatter formatter = new BinaryFormatter();
             try
             {
+
+                if (File.Exists("./translations.json"))
+                {
+                    var obj = JObject.Parse(File.ReadAllText("./translations.json"));
+
+                    foreach (var child in obj.Children())
+                    {
+                        foreach (var c2 in child.Values())
+                            Translation[c2.Value<string>()] = ((JProperty)child).Name.PadRight(16, '0');
+                    }
+                }
                 FileStream save = new FileStream("./save", FileMode.Open);
 
                 Users = (List<User>)formatter.Deserialize(save);
@@ -129,17 +156,6 @@ namespace FinanceThing
                     Transactions = (List<Transaction>)formatter.Deserialize(trans);
 
                     trans.Close();
-                }
-
-                if(File.Exists("./translations.json"))
-                {
-                    var obj = JObject.Parse(File.ReadAllText("./translations.json"));
-
-                    foreach (var child in obj.Children())
-                    {
-                        foreach (var c2 in child.Values())
-                            Translation[c2.Value<string>()] = ((JProperty)child).Name.PadRight(16, '0');
-                    }
                 }
             }
             catch

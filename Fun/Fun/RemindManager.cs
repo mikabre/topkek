@@ -147,44 +147,97 @@ namespace Fun
             }
             n = DateTime.Now;
 
+            DateTime base_date = DateTime.Now;
+
             var words = str.Split(' ').Select(s => s.ToLower()).ToArray();
-            if (words[0] == "next")
+
+            for (int i = 0; i < words.Length - 1; i++)
             {
-                if (days.Contains(words[1]))
+                if (words[i] == "next")
                 {
-                    var day = dayofweeks[(Array.IndexOf(days, words[1]) % 7)];
+                    if (days.Contains(words[i + 1]))
+                    {
+                        var day = dayofweeks[(Array.IndexOf(days, words[i + 1]) % 7)];
 
-                    DateTime orig = n;
+                        DateTime orig = n;
 
-                    n = n.AddDays(7);
+                        n = n.AddDays(7);
 
-                    while (n.DayOfWeek != day)
-                        n = n.AddDays(1);
+                        while (n.DayOfWeek != day)
+                            n = n.AddDays(1);
 
-                    return n;
+                        base_date = n;
+                        //break;
+                    }
                 }
-            }
-            else if (words[0] == "this")
-            {
-                if (days.Contains(words[1]))
+                else if (words[i] == "this")
                 {
-                    var day = dayofweeks[(Array.IndexOf(days, words[1]) % 7)];
+                    if (days.Contains(words[1]))
+                    {
+                        var day = dayofweeks[(Array.IndexOf(days, words[i + 1]) % 7)];
 
-                    DateTime orig = n;
+                        DateTime orig = n;
 
-                    if (n.DayOfWeek == day)
-                        n = n.AddDays(1);
+                        if (n.DayOfWeek == day)
+                            n = n.AddDays(1);
 
-                    while (n.DayOfWeek != day)
-                        n = n.AddDays(1);
+                        while (n.DayOfWeek != day)
+                            n = n.AddDays(1);
 
-                    return n;
+                        base_date = n;
+                        //break;
+                    }
                 }
+
+                int hour = -1;
+                int minute = 0;
+
+                if(words[i].EndsWith("am") || words[i].EndsWith("pm"))
+                {
+                    if (int.TryParse(words[i].Substring(0, words[i].Length - 2), out hour))
+                    {
+                        if (words[i].EndsWith("pm"))
+                            hour += 12;
+                    }
+                    else
+                    {
+                        continue;
+                    }
+                }
+                else if(i > 0 && words[i] == "am" || words[i] == "pm")
+                {
+                    if (int.TryParse(words[i - 1], out hour))
+                    {
+                        if (words[i].EndsWith("pm"))
+                            hour += 12;
+                    }
+                    else
+                        continue;
+                }
+                else if(words[i].Contains(":"))
+                {
+                    var fragments = words[i].Split(':');
+
+                    if(fragments.Length == 2)
+                    {
+                        if(int.TryParse(fragments[0], out int protohour) && protohour <= 23 && protohour >= 0)
+                        {
+                            if (int.TryParse(fragments[1], out int protominute) && protohour <= 59 && protohour >= 0)
+                            {
+                                hour = protohour;
+                                minute = protominute;
+                            }
+                        }
+                    }
+                }
+
+                if(hour != -1)
+                    base_date = new DateTime(base_date.Year, base_date.Month, base_date.Day, hour, minute, 0);
             }
 
             var amount = Parse(str);
 
-            return DateTime.Now + amount;
+            return base_date + amount;
         }
 
         static TimeSpan Parse(string str)
@@ -193,14 +246,32 @@ namespace Fun
             var base_date = b_d;
             var words = str.Split(' ');
 
+            Dictionary<string, string> mappings = new Dictionary<string, string>()
+            {
+                {"y", "year" },
+                {"m", "minute" },
+                {"s", "second" },
+                {"d", "day" },
+                {"w", "week" },
+                {"h", "hour" }
+            };
+
             for (int i = 0; i < words.Length - 1; i++)
             {
                 double amount = 0;
+                string unit = words[i + 1].ToLower().TrimEnd('s');
 
                 if (!double.TryParse(words[i], out amount))
-                    continue;
+                {
+                    if (double.TryParse(words[i].Substring(0, words[i].Length - 1), out amount) &&
+                        mappings.ContainsKey(words[i][words[i].Length - 1].ToString()))
+                    {
+                        unit = mappings[words[i][words[i].Length - 1].ToString()];
+                    }
+                    else
+                        continue;
+                }
 
-                string unit = words[i + 1].ToLower().TrimEnd('s');
                 switch (unit)
                 {
                     case "year":

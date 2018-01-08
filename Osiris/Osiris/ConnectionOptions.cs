@@ -25,7 +25,12 @@ namespace Osiris
         public string ZncPassword { get; set; }
         public string ZncUsername { get; set; }
         public string ZncNetwork { get; set; }
+        public bool Spoofed { get; set; }
+        public string SpoofAddr { get; set; }
         public List<string> Autojoin { get; set; }
+        public List<string> PermanentAccess { get; set; }
+
+        public bool Quiet { get; set; }
 
         public ConnectionOptions()
         {

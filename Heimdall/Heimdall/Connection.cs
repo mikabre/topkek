@@ -92,7 +92,7 @@ namespace Heimdall
 
                     Message msg = Message.Consume(NetworkStream);
 
-                    Console.WriteLine("Received {0} from {1}, data: {2}", msg.MessageType, msg.Source, Encoding.Unicode.GetString(msg.Data));
+                    //Console.WriteLine("Received {0} from {1}, data: {2}", msg.MessageType, msg.Source, Encoding.Unicode.GetString(msg.Data));
 
                     if(!msg.Valid)
                     {

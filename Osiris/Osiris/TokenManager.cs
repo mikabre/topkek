@@ -113,7 +113,9 @@ namespace Osiris
                 if(PermaTokens.Any(p => p.Key == token))
                 {
                     var ptoke = PermaTokens.First(p => p.Key == token);
-                    PermaTokens.Remove(ptoke);
+
+                    if(!((ConnectionOptions)ptoke.Source.Client.Options).PermanentAccess.Contains(token))
+                        PermaTokens.Remove(ptoke);
 
                     return ptoke.Source;
                 }
@@ -220,7 +222,11 @@ namespace Osiris
         public byte[] GetHash()
         {
             MD5CryptoServiceProvider md5 = new MD5CryptoServiceProvider();
-            return md5.ComputeHash(Encoding.ASCII.GetBytes(Client.ServerAddress + Source)).Take(8).ToArray();
+
+            var options = (ConnectionOptions)Client.Options;
+
+            string addr = options.Spoofed ? options.SpoofAddr : Client.ServerAddress;
+            return md5.ComputeHash(Encoding.ASCII.GetBytes(addr + Source)).Take(8).ToArray();
         }
 
         public override int GetHashCode()

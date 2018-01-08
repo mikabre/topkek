@@ -62,6 +62,21 @@ namespace Osiris
             return GetValue<double>(key);
         }
 
+        public static T[] GetArray<T>(string key)
+        {
+            return ((JArray)KeyStore[key]).Select(i => i.Value<T>()).ToArray();
+        }
+
+        public static bool ContainsObject(string key, out JToken token)
+        {
+            return ((JObject)KeyStore[key]).TryGetValue(key, out token);
+        }
+
+        public static bool ContainsPlain(string key, string item)
+        {
+            return Contains(key, item);
+        }
+
         public static bool Contains(string key, string item)
         {
             if (KeyStore == null || !KeyStore.ContainsKey(key))
@@ -73,6 +88,35 @@ namespace Osiris
                 return arr.Contains(item);
 
             return false;
+        }
+
+        public static bool Contains(string key, Func<JToken, bool> predicate)
+        {
+            if (KeyStore == null || !KeyStore.ContainsKey(key))
+                return false;
+
+            var arr = ((JArray)KeyStore[key]).ToArray();
+            return arr.Any(predicate);
+        }
+
+        public static bool Contains(string key, Func<JToken, bool> predicate, out JToken token)
+        {
+            token = null;
+
+            if (KeyStore == null || !KeyStore.ContainsKey(key))
+                return false;
+
+            var arr = ((JArray)KeyStore[key]).ToArray();
+            try
+            {
+                token = arr.First(predicate);
+            }
+            catch
+            {
+                return false;
+            }
+
+            return true;
         }
 
         public static void Add(string key, string item)
@@ -91,14 +135,15 @@ namespace Osiris
             KeyStore[key] = arr;
         }
 
-        public static void Remove(string key, string item)
+        public static bool Remove(string key, JToken item)
         {
             if (KeyStore == null || !KeyStore.ContainsKey(key))
-                return;
+                return false;
 
             var arr = ((JArray)KeyStore[key]);
-            arr.Remove(item);
+            bool success = arr.Remove(item);
             KeyStore[key] = arr;
+            return success;
         }
 
         public static void SetValue(string key, object value)

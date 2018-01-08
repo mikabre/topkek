@@ -26,7 +26,7 @@ namespace Fun
 
         public override string ToString()
         {
-            return string.Format("{0}: [10{2}] [05{1}] [03{3}]", To, From, Message, Utilities.TimeSpanToPrettyString(DateTime.UtcNow - Time));
+            return string.Format("{0}: [10{2}] [05{1}] [03{3} ago]", To, From, Message, Utilities.TimeSpanToPrettyString(DateTime.UtcNow - Time));
         }
     }
 
@@ -70,7 +70,7 @@ namespace Fun
 
         public static IEnumerable<Tell> GetTells(string nick)
         {
-            return Tells.Where(t => t.To == nick && !t.Expired);
+            return Tells.Where(t => t.To.ToLower() == nick.ToLower() && !t.Expired);
         }
 
         public static void Save()
