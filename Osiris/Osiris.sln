@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.25420.1
+# Visual Studio 15
+VisualStudioVersion = 15.0.27130.2010
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Osiris", "Osiris\Osiris.csproj", "{85D900B0-F2B3-4346-BDB6-814C688A421D}"
 EndProject
@@ -24,6 +24,7 @@ Global
 		{85D900B0-F2B3-4346-BDB6-814C688A421D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{85D900B0-F2B3-4346-BDB6-814C688A421D}.Release|Any CPU.Build.0 = Release|Any CPU
 		{C33F33F4-928B-46A5-8150-B2C642B800EA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C33F33F4-928B-46A5-8150-B2C642B800EA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C33F33F4-928B-46A5-8150-B2C642B800EA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C33F33F4-928B-46A5-8150-B2C642B800EA}.Release|Any CPU.Build.0 = Release|Any CPU
 		{4033AFFA-BEA3-4BDF-84EA-59A23360FD36}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -34,10 +35,14 @@ Global
 		{99F22C20-4569-49FE-B7EE-9ECA238AC13B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{99F22C20-4569-49FE-B7EE-9ECA238AC13B}.Release|Any CPU.Build.0 = Release|Any CPU
 		{4184F8D1-F4AF-4E85-9226-D4B8DD97D533}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4184F8D1-F4AF-4E85-9226-D4B8DD97D533}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4184F8D1-F4AF-4E85-9226-D4B8DD97D533}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4184F8D1-F4AF-4E85-9226-D4B8DD97D533}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {48B687BF-C8BD-4875-9BAB-F36A0D086DDB}
 	EndGlobalSection
 EndGlobal
